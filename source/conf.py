@@ -21,6 +21,9 @@ extensions = [
     'sphinx_toolbox.github',
 ]
 
+github_username = 'cozodb'
+github_repository = 'cozo'
+
 templates_path = ['_templates']
 exclude_patterns = []
 
