@@ -5,7 +5,7 @@
 In Cozo, data are stored in *stored relations* on disk.
 
 ---------------------------
-Stored relations
+存储表
 ---------------------------
 
 To query stored relations,
@@ -62,7 +62,7 @@ You can rename and remove stored relations with the system ops ``::relation rena
 described in the system op chapter.
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Create and replace
+创建与覆盖
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The format of ``<SPEC>`` is identical for all four ops, but the semantics is a bit different.
@@ -130,7 +130,7 @@ The expression is evaluated anew for each row, so if you specified a UUID-genera
 you will get a different UUID for each row.
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Put, remove, ensure and ensure-not
+增删改及约束
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For ``:put``, ``:remove``, ``:ensure`` and ``:ensure_not``,
@@ -142,7 +142,7 @@ For ``:put`` and ``:ensure``, the spec needs to contain enough bindings to gener
 For ``:rm`` and ``:ensure_not``, it only needs to generate all keys.
 
 ------------------------------------------------------
-Chaining queries
+连锁查询
 ------------------------------------------------------
 
 Each script you send to Cozo is executed in its own transaction.
@@ -202,7 +202,7 @@ some results and to insert various aspects of the results into different
 stored relations.
 
 ------------------------------------------------------
-Triggers and indices
+触发器与索引
 ------------------------------------------------------
 
 Cozo does not have traditional indices on stored relations.
