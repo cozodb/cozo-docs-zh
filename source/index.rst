@@ -32,6 +32,13 @@ Cozo 数据库文档
    nonscript
    release
 
+.. sidebar-links::
+	:caption: 链接
+   :github:
+
+	Gitee <https://gitee.com/cozodb/cozo>
+	项目主页 <https://www.cozodb.org>
+
 
 .. only:: html
 

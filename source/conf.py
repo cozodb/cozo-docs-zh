@@ -16,7 +16,9 @@ copyright = '2022, ' + author
 
 extensions = [
     'nbsphinx',
-    'myst_parser'
+    'myst_parser',
+    'sphinx_toolbox.sidebar_links',
+    'sphinx_toolbox.github',
 ]
 
 templates_path = ['_templates']
