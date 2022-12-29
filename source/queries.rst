@@ -2,202 +2,150 @@
 查询
 ==============
 
-CozoScript, a `Datalog <https://en.wikipedia.org/wiki/Datalog>`_ dialect, is the query language of the Cozo database.
+Cozo 数据库的查询语言名为 CozoScript，是 `Datalog <https://baike.baidu.com/item/Datalog>`_ 的一种方言。
 
-A CozoScript query consists of one or many named rules.
-Each named rule represents a *relation*, i.e. collection of data divided into rows and columns.
-The rule named ``?`` is the *entry* to the query,
-and the relation it represents is the result of the query.
-Each named rule has a rule head, which corresponds to the columns of the relation,
-and a rule body, which specifies the content of the relation, or how the content should be computed.
+CozoScript 中，查询由一个或多个 **规则** 组成。每个规则都有名字，代表一个 **关系表** （以下简称表），即行列数据的集合。名称为 ``?`` 的规则是查询的 **入口**，而它所代表的表是查询的结果。每个规则都由头部与正文组成。头部的绑定对应于表中的列，而正文则声明应该如何计算表的内容。
 
-Relations in Cozo (stored or otherwise) abide by the *set semantics*.
-Thus even if a rule computes a row multiple times,
-the resulting relation only contains a single copy.
+Cozo 中的表（不管是不是存储表）都遵守 **集合语义** ：即使一个规则多次产生同一行数据，同样的数据最终的结果只包含一次。
 
-There are two types of named rules in CozoScript:
+CozoScript 中有两种规则：
 
-* *Inline rules*, distinguished by using ``:=`` to connect the head and the body.
-  The logic used to compute the resulting relation is defined *inline*.
-* *Fixed rules*, distinguished by using ``<~`` to connect the head and the body.
-  The logic used to compute the resulting relation is *fixed* according to which algorithm or utility is requested.
+* **内联规则** ，使用 ``:=`` 来连接头部和正文。正文中通过原子的组合来声明结果的计算方法。
+* **固定规则** ，使用 ``<~`` 来连接头部和正文。固定规则中计算结果的算法是提前预设的，正文中只需要给出参数和选项。
 
-The *constant rules* which use ``<-`` to connect the head and the body are syntax sugar. For example::
-
+使用 ``<-`` 来连接头部和正文的 **常量规则** 其实是语法糖。比如：
+::
     const_rule[a, b, c] <- [[1, 2, 3], [4, 5, 6]]
 
-is identical to::
-
+与下面查询意思一致：
+::
     const_rule[a, b, c] <~ Constant(data: [[1, 2, 3], [4, 5, 6]])
 
 -----------------
 内联规则
 -----------------
 
-An example of an inline rule is::
-
+一个内联规则的例子：
+::
     hc_rule[a, e] := rule_a['constant_string', b], rule_b[b, d, a, e]
 
-The rule body of an inline rule consists of multiple *atoms* joined by commas,
-and is interpreted as representing the *conjunction* of these atoms.
+内联规则的正文由多个 **原子** 组成，原子间以逗号连接，其意义为这些原子的 **合取** 。
 
 ^^^^^^^^^^^^^^
 原子
 ^^^^^^^^^^^^^^
 
-Atoms come in various flavours.
-In the example above::
-
+原子分为多种。上例中：
+::
     rule_a['constant_string', b]
 
-is an atom representing a *rule application*: a rule named ``rule_a`` must exist in the same query
-and have the correct arity (2 here).
-Each row in the named rule is then *unified* with the bindings given as parameters in the square bracket:
-here the first column is unified with a constant string, and unification succeeds only when the string
-completely matches what is given;
-the second column is unified with the *variable* ``b``,
-and as the variable is fresh at this point (because this is its first appearance),
-the unification will always succeed. For subsequent atoms, the variable becomes *bound*:
-it take on the value of whatever it was
-unified with in the named relation.
-When a bound variable is unified again, for example ``b`` in ``rule_b[b, d, a, e]``,
-this unification will only succeed when the unified value is the same as the current value.
-Thus, repeated use of the same variable in named rules corresponds to inner joins in relational algebra.
+是一个 **规则应用** 原子：名为 ``rule_a`` 的规则必须定义在同一个查询中，且其必须接受对应数量的绑定（这里是 2）。这个规则所代表的表中的每行数据都会与方括号中给出的绑定进行 **归一** ：这里每行的第一列都与给出的常量字符串归一，如果这行所包含的第一列不等于这个字符串，则个归一会失败，而这行则被舍弃而不出现在结果中；而第二列则与一个 **变量** ``a`` 归一。由于这个变量在这里是 **新** 的（第一次出现），这个归一永远不会失败，且在接下来的语句中这行里这列的值就成为了这个变量的值，这个变量也就成了 **已绑定** 的变量。当已绑定的变量再次被归一时，只有当其当前值与新的归一值相等时，归一才会成功。因此，对多个规则应用使用同样的变量进行归一，就相当于关系代数中对表的内联操作。
 
-Atoms representing applications of *stored relations* are written as::
-
+对于 **存储表** 的规则应用，语法如下：
+::
     *stored_relation[bind1, bind2]
 
-with the asterisk before the name.
-Written in this way using square brackets, as many bindings as the arity of the stored relation must be given.
+这里星号表明这是一个存储表。当使用方括号时，我们必须给出与这个表所含列同样多的绑定。如果有些列不需要被绑定，可以使用特殊的变量 ``_`` ：这个变量不参与任何归一。
 
-You can also bind columns by name::
-
+存储表的列都有其名字，所以归一时可以通过名字来指定列：
+::
     *stored_relation{col1: bind1, col2: bind2}
 
-In this form, any number of columns may be omitted.
-If the name you want to give the binding is the same as the name of the column, you can write instead
-``*stored_relation{col1}``, which is the same as ``*stored_relation{col1: col1}``.
+如果使用此形式的归一，不需要的列可以不出现，顺序也不重要。如果需要绑定的列与变量名相同，可以简便地写做： ``*stored_relation{col1}`` ，意思与 ``*stored_relation{col1: col1}`` 一样。
 
-*Expressions* are also atoms, such as::
-
+另一种原子是 **表达式**，例如：
+::
     a > b + 1
 
-``a`` and ``b`` must be bound somewhere else in the rule. Expression atoms must evaluate to booleans,
-and act as *filters*. Only rows where the expression atom evaluates to ``true`` are kept.
+这里 ``a`` 和 ``b`` 不能是新的，必须在同一规则内其他地方被绑定（但绑定的地方不一定需要在这个表达式之前）。作为原子的表达式的结果必须是一个布尔值，当值为真的时候当前行被保留，为假的时候舍弃。因此原子表达式是用来过滤行的。
 
-*Unification atoms* unify explicitly::
-
+原子也可以是 **显性归一** 的表达式：
+::
     a = b + c + d
 
-Whatever appears on the left-hand side must be a single variable and is unified with the result of the right-hand side.
+等号左侧必须是一个变量，该变量与右侧的表达式归一。
 
 .. NOTE::
-    This is different from the equality operator ``==``,
-    where the left-hand side is a completely bound expression.
-    When the left-hand side is a single *bound* variable,
-    the equality and the unification operators are equivalent.
+    显性归一与等于算符 ``==`` 不同：等于算符的左侧可以是任何表达式。当然，当显性归一的左侧变量已被绑定时，这两种写法语义上是等价的。
 
-*Unification atoms* can also unify with multiple values in a list::
+显性归一也可以将变量与一个数组中的元素依次归一：
+::
 
     a in [x, y, z]
 
-If the right-hand side does not evaluate to a list, an error is raised.
+如果 ``in`` 右侧的表达式的结果不是一个数组，查询会报错。
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 头部
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As explained above, Atoms correspond to either relations, projections or filters in relational algebra.
-Linked by commas, they therefore represent a joined relation, with columns either constants or variables.
-The *head* of the rule, which in the simplest case is just a list of variables,
-then defines the columns to keep in the output relation and their order.
+如上所述，原子对应于关系代数中的表、表的投影或过滤，而逗号连接起来的原子则表示关系表的内联，其中表的列可以绑定为常量，也可以绑定为变量。最简单的规则 **头部** 就是一个变量列表，这个列表声明了正文中出现的所有变量中哪些需要被输出为结果，以及它们作为输出列的顺序。
 
-Each variable in the head must be bound in the body (the *safety rule*).
-Not all variables appearing in the body need to appear in the head.
+头部变量列表中的所有变量都必须在正文中被绑定（安全规则）。不需要的变量可以不出现在头部列表中。
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 多重正文和原子的析取
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For inline rules only, multiple rule definitions may share the same name,
-with the requirement that the arity of the head in each definition must match.
-The returned relation is then formed by the *disjunction* of the multiple definitions (a *union* of rows).
+一个内联规则（仅内联规则）可以有多条不同的正文，但这些正文所对应的头部的变量数目必须相同。当有多条正文时，这个规则的结果集合为每条正文所计算的集合的 **析取** （即多个集合中行的的“或”操作）。
 
-You may also use the explicit disjunction operator ``or`` in a single rule definition::
-
+有时候使用 ``or`` 算符来表达析取可以使查询更加简洁：
+::
     rule1[a, b] := rule2[a] or rule3[a], rule4[a, b]
 
-There is also an ``and`` operator, semantically identical to the comma ``,``
-but has higher operator precedence than ``or`` (the comma has the lowest precedence).
+另外，算符 ``and`` 也可以用来表达合取，与逗号一样。但是算符 ``and`` 的算符优先级比 ``or`` 高， ``or`` 又比逗号高。
 
 ^^^^^^^^^^^^^^^^
 否定
 ^^^^^^^^^^^^^^^^
 
-Atoms in inline rules may be *negated* by putting ``not`` in front of them::
-
+在一个原子前使用 ``not`` 算符来表示对其的 **否定** ：
+::
     not rule1[a, b]
 
-When negating rule applications and stored relations,
-at least one binding must be bound somewhere else in the rule in a non-negated context (another *safety rule*).
-The unbound bindings in negated rules remain unbound: negation cannot introduce new bindings to be used in the head.
+当否定规则或存储表的应用时，至少有一个绑定变量必须是在正文中未绑定的部位被绑定过的（这也是一条 **安全规则**）。如果否定应用中的其它变量没有出现在未绑定的部位，那这些变量也不会成为绑定的，也就是说他们不能出现在头部中：否定的原子不会产生新的绑定。
 
-Negated expressions act as negative filters,
-which is semantically equivalent to putting ``!`` in front of the expression.
-Explict unification cannot be negated unless the left-hand side is bound,
-in which case it is treated as an expression atom and then negated.
+使用 ``not`` 对表达式进行的否定，其语义与使用 ``!`` 对这个表达式进行的否定相同，其结果是一个新的表达式，作为过滤器使用。
+
+对显性归一的否定只有在其左边变量已经被绑定时才被允许。在这种情况下，整个归一被转换成等价的布尔表达式，然后对这个表达式求非。
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-递归与分层
+递归
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The body of an inline rule may contain rule applications of itself,
-and multiple inline rules may apply each other recursively.
-The only exception is the entry rule ``?``, which cannot be referred to by other rules including itself.
+内联规则中可以出现对其它规则的应用，包括对自己的应用，且多个内联规则间可以相互应用：这就是 **递归**。这里有一个例外：名为 ``?`` 的规则不能被应用，自我应用也不行。
 
-Recursion cannot occur in negated positions (*safety rule*): ``r[a] := not r[a]`` is not allowed.
+递归应用不可以被否定（ **安全规则** ）： ``r[a] := not r[a]`` 是非法的。
 
 .. WARNING::
-    As CozoScript allows explicit unification,
-    queries that produce infinite relations may be accepted by the compiler.
-    One of the simplest examples is::
-
+    CozoScript 允许显性归一，而显性归一可以生成无穷大的表。一个简单的例子是：
+    ::
         r[a] := a = 0
         r[a] := r[b], a = b + 1
         ?[a] := r[a]
 
-    It is not even in principle possible for Cozo to rule out all infinite queries without wrongly rejecting valid ones.
-    If you accidentally submitted one, refer to the system ops chapter for how to terminate queries.
-    Alternatively, you can give a timeout for the query when you submit.
+    编译器从原理上无法检测一个查询是否一定会生成无穷表，而禁止这种可能性则会同时禁止很多其实结果有限的查询。因此用户有责任保证返回表都是有限的。如果你不小心进行了一个无穷大的查询，你可以杀掉其进程：具体方法见 :doc:`sysops` 章节。或者你可以在提交查询时就给一个时间限制。
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 聚合
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In CozoScript, aggregations are specified for inline rules by applying *aggregation operators* to variables
-in the rule head::
-
+在 CozoScript 中，聚合表示为在内联规则的头部对变量应用 **聚合算符**：
+::
     ?[department, count(employee)] := *personnel{department, employee}
 
-here we have used the familiar ``count`` operator.
-Any variables in the head without aggregation operators are treated as *grouping variables*,
-and aggregation is applied using them as keys.
-If you do not specify any grouping variables, then the resulting relation contains at most one row.
+这里我们应用了常见的计数 ``count`` 算符。头部中没有聚合算符的变量都被视为 **分组变量** ，以它们作为键进行聚合。如果你没有指定任何分组变量，那么产生的表仅会包含一行。
 
-Aggregation operators are applied to the rows computed by the body of the rule using bag semantics.
-The reason for this complication is that if aggregations are applied with set semantics, then the following query::
-
+在应用聚合算符时，使用的是词袋语义而非集合语义，原因是如果不这样，那下面的查询：
+::
     ?[count(employee)] := *personnel{employee}
 
-does not do what you expect: it either returns a row with a single value ``1`` if there are any matching rows,
-or it returns nothing at all if the stored relation is empty.
+当存储表中有数据时会返回 ``1``，没有时会返回 ``0``。这与一般人理解的“计数”算符不一样。而在此处使用词袋语义则没有这个问题。
 
-If a rule has several definitions, they must have identical aggregations applied in the same positions.
+如果一个内联规则有多条正文，那每条正文所对应的头部都必须在相同的位置应用了相同的聚合算符。
 
-Cozo allows aggregations for self-recursion for a limited subset of aggregation operators,
-the so-called *semi-lattice aggregations*::
-
+Cozo 允许同时应用聚合算符与自递归，前提是聚合算符必须是 **半晶格算符** （详见 :doc:`此章 <aggregations>`）：
+::
     shortest_distance[destination, min(distance)] :=
         route{source: 'A', destination, distance}
 
@@ -209,111 +157,78 @@ the so-called *semi-lattice aggregations*::
     ?[destination, min_distance] :=
         shortest_distance[destination, min_distance]
 
-Here self-recursion of ``shortest_distance`` contains the ``min`` aggregation.
+这里 ``shortest_distance`` 的自递归含有半晶格算符 ``min``。
 
-For a rule-head to be considered semi-lattice-aggregate, the aggregations must come at the end of the rule head.
-In the above example, if you write the head as ``shortest_distance[min(distance), destination]``,
-the query engine will complain about unsafe recursion through aggregation, since written
-this way ``min`` is considered an ordinary aggregation.
+这种半晶格算符与自递归的组合同时要求所有的聚合算符都出现在头部列表的末尾部分。在上例中，如果将头部写为 ``shortest_distance[min(distance), destination]``，则编译器会报错，因为这时编译器不会讲 ``min`` 作为半晶格算符来考虑，因而会禁止其在递归中的应用。
 
 ----------------------------------
 固定规则
 ----------------------------------
 
-The body of a fixed rule starts with the name of the utility or algorithm being applied,
-then takes a specified number of named or stored relations as its *input relations*,
-followed by *options* that you provide.
-For example::
-
+固定规则的正文由规则名称及参数和选项的列表组成，比如：
+::
     ?[] <~ PageRank(*route[], theta: 0.5)
 
-In the above example, the relation ``*route`` is the single input relation expected.
-Input relations may be stored relations or relations resulting from rules.
+上例中，存储表 ``*route`` 是唯一的参数。只有存储表与规则所代表的表才能作为参数。
 
-Each utility/algorithm expects specific shapes for their input relations.
-You must consult the documentation for each utility/algorithm to understand its API.
+不同的固定规则对参数有不同的要求，具体而言必须查阅相应的 :doc:`文档 <algorithms>` 才能了解如何使用。
 
-In fixed rules, bindings for input relations are usually omitted, but sometimes if they are provided
-they are interpreted and used in algorithm-specific ways, for example in the DFS algorithm bindings.
+在固定规则中，参数的绑定通常被省略。如果提供绑定，则这些绑定的意义也是根据不同的规则而不懂的。例如在 DFS 算法中，绑定就有其特殊的作用。
 
-In the example above, ``theta`` is an option of the algorithm,
-which is required by the API to be an expression evaluating to a constant.
-Each utility/algorithm expects specific types for the options;
-some options have default values and may be omitted.
+在上例中， ``theta`` 是算法的一个选项，而这个算法的API要求其为值是常数的表达式。不同的算法要求不同的选项，而有些选项有默认值，可以省略。
 
-Each fixed rule has a determinate output arity.
-Thus, the bindings in the rule head can be omitted,
-but if they are provided, you must abide by the arity.
+每个固定规则都会输出固定数量的列。因此，固定规则头部的绑定可以省略。但如果不省略，那数量就必须对得上。
 
 -----------------------
 查询选项
 -----------------------
 
-Each query can have options associated with it::
-
+每个查询都可以有其 **查询选项**：
+::
     ?[name] := *personnel{name}
 
     :limit 10
     :offset 20
 
-In the example, ``:limit`` and ``:offset`` are query options with familiar meanings.
-All query options start with a single colon ``:``.
-Queries options can appear before or after rules, or even sandwiched between rules.
+上例中， ``:limit`` 与 ``:offset`` 是查询选项，对于使用过 SQL 的人来说意思很明显。所有的查询选项都以单个冒号 ``:`` 开头。
+查询选项可以放在规则前，也可以放在后面，甚至夹在中间。
 
-Several query options deal with transactions for the database.
-Those will be discussed in the chapter on stored relations and transactions.
-The rest of the query options are explained in the following.
+有一些查询选项的作用是对数据库进行读写，这部分的选项将在 :doc:`另一章节 <stored>` 中详述。接下来我们介绍与读写无关的选项。
 
 .. module:: QueryOp
     :noindex:
 
 .. function:: :limit <N>
 
-    Limit output relation to at most ``<N>`` rows.
-    If possible, execution will stop as soon as this number of output rows is collected.
+    限制最大返回行数为 ``<N>`` 。可能的话，在查询生成了足够数量的返回行数后执行便会停止（早停法）。
 
 .. function:: :offset <N>
 
-    Skip the first ``<N>`` rows of the returned relation.
+    在返回时跳过前 ``<N>`` 行。
 
 .. function:: :timeout <N>
 
-    Abort if the query does not complete within ``<N>`` seconds.
-    Seconds may be specified as an expression so that random timeouts are possible.
+    如果查询不在 ``<N>`` 秒内完成，则强行终止。秒数可以是一个表达式，因此可以指定随机的秒数。
 
 .. function:: :sleep <N>
 
-    If specified, the query will wait for ``<N>`` seconds after completion,
-    before committing or proceeding to the next query.
-    Seconds may be specified as an expression so that random timeouts are possible.
-    Useful for deliberately interleaving concurrent queries to test complex logic.
+    查询完成后等待 ``<N>`` 秒再提交事务并返回。秒数可以是一个表达式，因此可以指定随机的秒数。用处是用来进行复杂逻辑中穿插事务的测试。
 
 .. function:: :sort <SORT_ARG> (, <SORT_ARG>)*
 
-    Sort the output relation. If ``:limit`` or ``:offset`` are specified, they are applied after ``:sort``.
-    Specify ``<SORT_ARG>`` as they appear in the rule head of the entry, separated by commas.
-    You can optionally specify the sort direction of each argument by prefixing them with ``+`` or ``-``,
-    with minus denoting descending order, e.g. ``:sort -count(employee), dept_name``
-    sorts by employee count in reverse order first,
-    then break ties with department name in ascending alphabetical order.
+    对结果进行排序。如果 ``:limit`` 或 ``:offset`` 选项存在，则 ``:sort`` 执行后它们才会被执行。 ``<SORT_ARG>`` 用来指定排序的列，列名与 ``?`` 规则头部中的绑定相同，如需要多个以逗号隔开。可以在列名前添加 ``+`` 用来表示升序排列（和不加效果一样），添加 ``-`` 用来表示降序排列，例如 ``:sort -count(employee), dept_name`` 先以计数进行降序排列，当计数相同时按照名字顺序升序排列。
 
     .. WARNING::
-        Aggregations must be done in inline rules, not in output sorting. In the above example,
-        the entry rule head must contain ``count(employee)``, ``employee`` alone is not acceptable.
+        只有在内联规则中才能应用聚合算符。因此在上例中， ``?`` 规则的头部必须包含聚合 ``count(employee)`` ，单有 ``employee`` 是不行的。
 
 .. function:: :order <SORT_ARG> (, <SORT_ARG>)*
 
-    Alias for ``:sort``.
+    ``:sort`` 的别名。
 
 .. function:: :assert none
 
-    The query returns nothing if the output relation is empty, otherwise execution aborts with an error.
-    Useful for transactions and triggers.
+    如果查询返回结果非空，则报错。主要在事务与触发器中使用。
 
 .. function:: :assert some
 
-    The query returns nothing if the output relation contains at least one row,
-    otherwise, execution aborts with an error.
-    Useful for transactions and triggers.
-    You should consider adding ``:limit 1`` to the query to ensure early termination
-    if you do not need to check all return tuples.
+    如果查询结果为空，则报错。主要在事务与触发器中使用。如果不需要返回所有行，你可以同时加上 ``:limit 1`` 选项，这也可能会触发早停法使查询变得更快。
