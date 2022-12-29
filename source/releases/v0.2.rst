@@ -1,4 +1,4 @@
-Cozo哪儿都能跑
+Cozo 哪儿都能跑
 ==============================
 
 Version 0.1 of Cozo can be used embedded from Python, NodeJS, Java, Rust

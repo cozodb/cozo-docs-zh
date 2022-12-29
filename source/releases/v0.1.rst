@@ -1,4 +1,4 @@
-Cozo的应用场景
+Cozo 的应用场景
 =========================
 
 As Cozo is a general-purpose database, 

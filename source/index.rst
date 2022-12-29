@@ -12,7 +12,7 @@ Cozo 数据库文档
 
 无需在电脑上安装任何软件，现在就打开 :doc:`tutorial` 开始学习吧！
 
-如需要具体安装说明以及针对特定语言的API，请参考 Cozo 的 `GitHub页面 <https://github.com/cozodb/cozo/blob/main/README-zh.md>`_ 或者 `Gitee页面 <https://gitee.com/cozodb/cozo>`_。
+如需要具体安装说明以及针对特定语言的API，请参考 Cozo 的 `GitHub 页面 <https://github.com/cozodb/cozo/blob/main/README-zh.md>`_ 或者 `Gitee 页面 <https://gitee.com/cozodb/cozo>`_。
 
 .. toctree::
    :maxdepth: 2
