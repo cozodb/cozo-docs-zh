@@ -5,20 +5,15 @@
 .. module:: SysOp
     :noindex:
 
-System ops start with a double-colon ``::`` and must appear alone in a script. 
-In the following, we explain what each system op does, and the arguments they expect.
+所有的系统操作都由两个冒号 ``::`` 开始。下面我们介绍各个系统操作及所需参数。
 
 --------------
-查询的解释
+解释查询
 --------------
 
 .. function:: ::explain { <QUERY> }
 
-    A single query is enclosed in curly braces. Query options are allowed but ignored.
-    The query is not executed, but its query plan is returned instead.
-    Currently, there is no specification for the return format,
-    but if you are familiar with the semi-naïve evaluation of stratified Datalog programs
-    subject to magic-set rewrites, you can decipher the result.
+    ``<QUERY>`` 是一单个完整的查询。可以含有查询选项，但是由于查询本身不会被执行，选项不起任何作用。返回的不是查询的结果，而是查询的执行计划。返回格式目前仍没有固定的标准，不过在阅读 :doc:`此章 <execution>` 之后应该基本能理解。
 
 ----------------------------------
 对存储表的操作
@@ -26,39 +21,38 @@ In the following, we explain what each system op does, and the arguments they ex
 
 .. function:: ::relations
 
-    List all stored relations in the database
+    列出所有存储表。
 
 .. function:: ::columns <REL_NAME>
 
-    List all columns for the stored relation ``<REL_NAME>``.
+    列出存储表 ``<REL_NAME>`` 的所有列。
 
 .. function:: ::remove <REL_NAME> (, <REL_NAME>)*
 
-    Remove stored relations. Several can be specified, joined by commas.
+    删除存储表。如果要一次性删除多个，则用逗号连接其名称。
 
 .. function:: ::rename <OLD_NAME> -> <NEW_NAME> (, <OLD_NAME> -> <NEW_NAME>)*
 
-    Rename stored relation ``<OLD_NAME>`` into ``<NEW_NAME>``. Several may be specified, joined by commas.
+    改变存储表的名称：由 ``<OLD_NAME>`` 改为 ``<NEW_NAME>`` 。可以同时改多个表的名称，也是用逗号隔开。
 
 .. function:: ::show_triggers <REL_NAME>
 
-    Display triggers associated with the stored relation ``<REL_NAME>``.
+    列出存储表 ``<REL_NAME>`` 关联的触发器。
 
 .. function:: ::set_triggers <REL_NAME> ...
 
-    Set triggers for the stored relation ``<REL_NAME>``. This is explained in more detail in the transaction chapter.
+    为存储表 ``<REL_NAME>`` 设置触发器， :doc:`stored` 中有详细说明。
 
 .. function:: ::access_level <ACCESS_LEVEL> <REL_NAME> (, <REL_NAME>)*
 
-    Sets the access level of ``<REL_NAME>`` to the given level. The levels are:
+    设置存储表 ``<REL_NAME>`` 的安全级（也叫锁表）。可用的级别如下：
 
-    * ``normal`` allows everything,
-    * ``protected`` disallows ``::remove`` and ``:replace``,
-    * ``read_only`` additionally disallows any mutations and setting triggers,
-    * ``hidden`` additionally disallows any data access (metadata access via ``::relations``, etc., are still allowed).
+    * ``normal`` ：任何操作都被允许；
+    * ``protected`` 禁止 ``::remove`` 和 ``:replace``；
+    * ``read_only`` 在上面的基础上禁止一切对行的写入及删除操作；
+    * ``hidden`` 在上面的基础上禁止读操作（系统操作 ``::relations`` 等属于元数据操作，不属于读操作，所以仍可以执行）。
 
-    The access level functionality is to protect data from mistakes of the programmer,
-    not from attacks by malicious parties.
+    这些安全级别主要是为了防止程序员无心的错误造成数据的损坏与丢失，并不是为了防止非法数据访问。
 
 ------------------------------------
 进程
@@ -66,11 +60,11 @@ In the following, we explain what each system op does, and the arguments they ex
 
 .. function:: ::running
 
-    Display running queries and their IDs.
+    列出所有正在运行的查询以及其 ID。
 
 .. function:: ::kill <ID>
 
-    Kill a running query specified by ``<ID>``. The ID may be obtained by ``::running``.
+    强行终止某个查询。ID 可通过 ``::running`` 命令获得。
 
 ------------------------------------
 维护
@@ -78,5 +72,4 @@ In the following, we explain what each system op does, and the arguments they ex
 
 .. function:: ::compact
 
-    Instructs Cozo to run a compaction job.
-    Compaction makes the database smaller on disk and faster for read queries.
+    要求存储引擎执行数据紧缩操作。紧缩后可能可以使数据文件所占空间减小，访问变快。

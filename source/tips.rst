@@ -6,73 +6,63 @@
 空值的问题
 ------------------------------
 
-Cozo is strict about types. A simple query such as::
-
+Cozo 的类型检查很严格：下面的查询
+::
     ?[a] := *rel[a, b], b > 0
 
-will throw if some of the ``b`` is null: comparisons can only be made between values of the same type.
-There are various ways you can deal with it: if you decide that the condition should be ``false`` if values are
-not of the same type, you write::
-
+当 ``b`` 为空值时会报错，因为只能对相同类型的值做大小比较。如果你决定所有空值的比较都应该返回假，则你可以使用 ``try`` 结构来捕获异常：
+::
     ?[a] := *rel[a, b], try(b > 0, false)
 
-Alternatively, you may decide to consider any ``null`` values to be equivalent to some default values, 
-in which case you write::
-
+或者你可以认为空值代表某一个具体的非空值，那么你应该这么写：
+::
     ?[a] := *rel[a, b], (b ~ -1) > 0
 
-here ``~`` is the ``coalesce`` operator. The parentheses are not necessary, but it reads better this way.
-We recommend using the ``coalesce`` operator over using ``try``, since it is more explicit.
+这里的 ``~`` 是“聚凝”算符。括号其实不是必须的，但是可以让这个查询更易读一些。可能的话，建议使用聚凝算符而不是 ``try`` 结构。
 
-You can also be very explicit::
+当然你也可以写得更啰嗦一些：
+::
 
     ?[a] := *rel[a, b], if(is_null(b), false, b > 0)
 
-but this is rather verbose. ``cond`` is also helpful in this case.
+你也可以使用 ``cond`` 结构。
 
 ------------------------------
 如何连接表
 ------------------------------
 
-Suppose we have the following relation::
-
+假设我们有如下存储表：
+::
     :create friend {fr, to}
 
-Let's say we want to find Alice's friends' friends' friends' friends' friends. One way to write this is::
-
+我们想知道 Alice 的朋友的朋友的朋友的朋友的朋友们都是谁。我们可以这么写：
+::
     ?[who] := *friends{fr: 'Alice', to: f1},
               *friends{fr: f1, to: f2},
               *friends{fr: f2, to: f3},
               *friends{fr: f3, to: f4},
               *friends{fr: f4, to: who}
 
-Another way is::
-
+也可以这么写：
+::
     f1[who] := *friends{fr: 'Alice', to: who}
     f2[who] := f1[fr], *friends{fr, to: who}
     f3[who] := f2[fr], *friends{fr, to: who}
     f4[who] := f3[fr], *friends{fr, to: who}
     ?[who] := f4[fr], *friends{fr, to: who}
 
-These two queries yield identical values. But on real networks, where loops abound, 
-the second way of writing executes exponentially faster than the first.
-Why? Because of set semantics in relations, the second way of writing deduplicates at every turn,
-whereas the first way of writing builds up all paths to the final layer of friends. Depending on
-the size of your graph, your computer may not even have enough memory to hold all these paths!
+这两种写法的返回值是相同的。但是，在真实的社交网络数据中，第二种写法比第一种写法快得多（指数级别地快），其原因在于 Cozo 的表遵循集合语义，因此第二种写法中每层朋友都被去重了。与此相对的，第一种写法只有在返回时朋友们才会被去重，而这其中生成的中间结果就太多了。
 
-The moral of the story is, always prefer to break your query into smaller rules.
-It usually reads better, and unlike in some other databases, 
-it almost always executes faster in Cozo as well. But for this particular case, in which the query
-is largely recursive, prefer to make it a recursive relation::
-
+因此，我们在写查询语句的时候，应该尽量将查询分为多个小规则。这不但让查询更易读，也会让查询运行得更快（这一点和其他一些数据库正好相反）。当然，上面的例子其实用递归查询更好：
+::
     f_n[who, min(layer)] := *friends{fr: 'Alice', to: who}, layer = 1
     f_n[who, min(layer)] := f_n[fr, last_layer], *friends{fr, to: who}, layer = last_layer + 1, layer <= 5
     ?[who] := f_n[who, 5]
 
-The condition ``layer <= 5`` is necessary to ensure termination.
+这里我们用了一个表达式原子 ``layer <= 5`` 来保证返回结果不是无穷大集。
 
-Are there any situations where the first way of writing is acceptable? Yes::
-
+第一种写法也有其作用，比如：
+::
     ?[who] := *friends{fr: 'Alice', to: f1},
               *friends{fr: f1, to: f2},
               *friends{fr: f2, to: f3},
@@ -80,17 +70,14 @@ Are there any situations where the first way of writing is acceptable? Yes::
               *friends{fr: f4, to: who}
     :limit 1
 
-in this case, we stop at the first path, and this way of writing avoids the overhead of multiple rules
-and is perhaps very slightly faster.
+因为我们要求数据库至多返回一行结果，“早停法”的机能会被激活。在这种情况下，这样写会比拆成多个规则稍微快那么一点。
 
-Also, if you want to count the different paths, you must write::
-
+另外，在聚合数据时：
+::
     ?[count(who)] := *friends{fr: 'Alice', to: f1},
                      *friends{fr: f1, to: f2},
                      *friends{fr: f2, to: f3},
                      *friends{fr: f3, to: f4},
                      *friends{fr: f4, to: who}
 
-The multiple-rules way of writing gives wrong results due to set semantics.
-Due to the presence of the aggregation ``count``, this query only keeps a single path in memory at any instant,
-so it won't blow up your memory even on web-scale data.
+合起来写与拆成多个规则写返回的结果是不同的。对于这个具体的查询，如果你想知道的是 Alice 到她第五层朋友们不同 **路径** 的数目，那只有上面这种写法是对的。另外，虽然不同路径的数量很大，以上查询执行时使用的内存非常小，因为 Cozo 在这里执行流式计算，中间结果不需要存在任何表中。
