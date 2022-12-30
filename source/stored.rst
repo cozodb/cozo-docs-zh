@@ -2,74 +2,55 @@
 存储表与事务
 ====================================
 
-In Cozo, data are stored in *stored relations* on disk.
+Cozo 使用 **存储表** 来存数据。
 
 ---------------------------
 存储表
 ---------------------------
 
-To query stored relations,
-use the ``*relation[...]`` or ``*relation{...}`` atoms in inline or fixed rules,
-as explained in the last chapter.
-To manipulate stored relations, use one of the following query options:
+查询存储表时，使用类如 ``*relation[...]`` 或 ``*relation{...}`` 的原子应用（ :doc:`上一章 <queries>` 中已详述）。以下查询选项可用来操作存储表的读写：
 
 .. module:: QueryOp
     :noindex:
 
 .. function:: :create <NAME> <SPEC>
 
-    Create a stored relation with the given name and spec.
-    No stored relation with the same name can exist beforehand.
-    If a query is specified, data from the resulting relation is put into the newly created stored relation.
-    This is the only stored relation-related query option in which a query may be omitted.
+    创建一个名为 ``<NAME>`` 的新存储表，使用 ``<SPEC>`` 作为其列定义。若已有同名的存储表存在，则报错。若同时也给出了 ``?`` 入口规则，则该规则中的数据会被在创建表时插入。这是唯一一个可以省略入口规则的查询选项。
 
 .. function:: :replace <NAME> <SPEC>
 
-    Similar to ``:create``, except that if the named stored relation exists beforehand,
-    it is completely replaced. The schema of the replaced relation need not match the new one.
-    You cannot omit the query for ``:replace``.
-    If there are any triggers associated, they will be preserved. Note that this may lead to errors if ``:replace``
-    leads to schema change.
+    功能与 ``:create`` 类似，也是创建存储表，其区别在于如果已有重名的表存在，则重名的表（包括其中数据）会被删除，然后新表会被建立。若重名表有关联的触发器，则这些触发器会被关联到新表上，即使新表的列定义不同（这可能会使执行触发器时报错，需要手动调整）。使用 ``:replace`` 时入口规则不可省略。
 
 .. function:: :put <NAME> <SPEC>
 
-    Put rows from the resulting relation into the named stored relation.
-    If keys from the data exist beforehand, the corresponding rows are replaced with new ones.
-
-.. function:: :ensure <NAME> <SPEC>
-
-    Ensure that rows specified by the output relation and spec exist in the database,
-    and that no other process has written to these rows when the enclosing transaction commits.
-    Useful for ensuring read-write consistency.
+    将入口查询的表中各行插入名为 ``<NAME>`` 的存储表。若存储表中已有同键的数据，则会被新插入的数据覆盖。
 
 .. function:: :rm <NAME> <SPEC>
 
-    Remove rows from the named stored relation. Only keys should be specified in ``<SPEC>``.
-    Removing a non-existent key is not an error and does nothing.
+    将入口查询表中所有键从名为 ``<NAME>`` 的存储表中删除。在 ``<SPEC>`` 中，只需要声明键的列，不需要值的列。需要删除的键即使在表中不存在也不会报错。
+
+.. function:: :ensure <NAME> <SPEC>
+
+    检查入口查询表中的所有键值都在名为 ``<NAME>`` 的存储表中存在，且当前事务从开始到提交这段时间内没有其他事务更改过这些键值。主要用来保证一些查询的读写一致性。
 
 .. function:: :ensure_not <NAME> <SPEC>
 
-    Ensure that rows specified by the output relation and spec do not exist in the database
-    and that no other process has written to these rows when the enclosing transaction commits.
-    Useful for ensuring read-write consistency.
+    检查入口查询表中的所有键值都不存在于名为 ``<NAME>`` 的存储表中，且当前事务从开始到提交这段时间内没有其他事务更改过这些键。主要用来保证一些查询的读写一致性。
 
 .. function:: :yield <NAME>
 
-    When chaining queries, make the return set of the current query available in the subsequent
-    queries as the given name.
+    使用连锁查询时，将当前查询的入口表命名为 ``<NAME>`` 并使其可以在后面的查询中使用。
 
-You can rename and remove stored relations with the system ops ``::relation rename`` and ``::relation remove``,
-described in the system op chapter.
+如果需要删除存储表，需要使用系统操作 ``::remove``；如果需要修改存储表的名称，使用系统操作 ``:rename``。在 :doc:`sysops` 一章中有论述。
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 创建与覆盖
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The format of ``<SPEC>`` is identical for all four ops, but the semantics is a bit different.
-We first describe the format and semantics for ``:create`` and ``:replace``.
+以上各选项中的列定义 ``<SPEC>`` 格式都相同，但语义略有差异。以下我们先介绍其在 ``:create`` 和 ``:replace`` 中的语义。
 
-A spec, or a specification for columns, is enclosed in curly braces ``{}`` and separated by commas::
-
+列定义最外层是花括号 ``{}`` ，其中每列的定义由逗号隔开，如下例：
+::
     ?[address, company_name, department_name, head_count] <- $input_data
 
     :create dept_info {
@@ -80,26 +61,16 @@ A spec, or a specification for columns, is enclosed in curly braces ``{}`` and s
         address: String,
     }
 
-Columns before the symbol ``=>`` form the *keys* (actually a composite key) for the stored relation,
-and those after it form the *values*.
-If all columns are keys, the symbol ``=>`` may be omitted.
-The order of columns matters.
-Rows are stored in lexicographically sorted order in trees according to their keys.
+``=>`` 符号之前的列组成存储表的 **键** ，之后的组成 **值** 。如果所有列都是键，则符号 ``=>`` 可省略。列的顺序，尤其是键列的顺序，是很重要的：数据按照键列的字典排序顺序存在数据库的存储中。
 
-In the above example, we explicitly specified the types for all columns.
-In case of type mismatch,
-the system will first try to coerce the values given, and if that fails, the query is aborted with an error.
-You can omit types for columns, in which case their types default to ``Any?``,
-i.e. all values are acceptable.
-For example, the above query with all types omitted is::
-
+在以上例子中，我们对每一列都声明了类型。如果存入的行中数据的类型与声明的类型不同，系统会先尝试进行类型转换，如果不成功，则报错。如果省略类型声明，则默认的类型为 ``Any?`` ，可存入任何数据。举例来说，上面的例子将所有类型省略，我们就得到：
+::
     ?[address, company_name, department_name, head_count] <- $input_data
 
     :create dept_info { company_name, department_name => head_count, address }
 
-In the example, the bindings for the output match the columns exactly (though not in the same order).
-You can also explicitly specify the correspondence::
-
+在例子中，入口的绑定变量与列名相同（虽然顺序不同）。如果不同，我们可以指定每列对应的入口绑定：
+::
     ?[a, b, count(c)] <- $input_data
 
     :create dept_info {
@@ -110,11 +81,10 @@ You can also explicitly specify the correspondence::
         address: String = b
     }
 
-You *must* use explicit correspondence if the entry head contains aggregation,
-since names such as ``count(c)`` are not valid column names.
-The ``address`` field above shows how to specify both a type and a correspondence.
+如果入口绑定的变量含有聚合操作算符，则必须显性地指定对应关系，因为诸如 ``count(c)`` 的入口绑定不是合法的列名。另外在上例 ``address`` 列中，我们也可以看到如何同时声明类型和绑定对应。
 
-Instead of specifying bindings, you can specify an expression that generates default values by using ``default``::
+也可以使用 ``default`` 给列声明默认值：
+::
 
     ?[a, b] <- $input_data
 
@@ -126,40 +96,28 @@ Instead of specifying bindings, you can specify an expression that generates def
         address default ''
     }
 
-The expression is evaluated anew for each row, so if you specified a UUID-generating functions,
-you will get a different UUID for each row.
+默认值可以是一个表达式，这个表达式会对插入的每行重新执行。因此如果默认值是一个生成随机 UUID 的表达式，那每个插入的行都会得到一个不一样的 UUID。
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 增删改及约束
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For ``:put``, ``:remove``, ``:ensure`` and ``:ensure_not``,
-you do not need to specify all existing columns in the spec if the omitted columns have a default generator,
-or if the type of the column is nullable, in which case the value defaults to ``null``.
-For these operations, specifying default values does not have any effect and will not replace existing ones.
+使用 ``:put`` 、 ``:remove`` 、 ``:ensure`` 、 ``:ensure_not`` 时，当某列在表创建时有默认值或这些列可为空的情况下，这些列可以在列定义中省略，而插入或删除的列值为默认值或空值。在这些操作中声明新的默认值没有任何效果。
 
-For ``:put`` and ``:ensure``, the spec needs to contain enough bindings to generate all keys and values.
-For ``:rm`` and ``:ensure_not``, it only needs to generate all keys.
+在使用 ``:put`` 与 ``:ensure`` 时，给出的列定义，加上默认值，必须足够生成所有的键值列。
+
+在使用 ``:rm`` 与 ``:ensure_not`` 时，给出的列定义，加上默认值，必须足够生成所有的键列（值列不需要）。
 
 ------------------------------------------------------
 连锁查询
 ------------------------------------------------------
 
-Each script you send to Cozo is executed in its own transaction.
-To ensure consistency of multiple operations on data,
-You can define multiple queries in a single script,
-by wrapping each query in curly braces ``{}``.
-Each query can have its independent query options.
-Execution proceeds for each query serially, and aborts at the first error encountered.
-The returned relation is that of the last query.
+每个提交给数据库的查询文本都在独立的 **事务** 中执行。当需要保证多个操作能够原子的执行时，可以将多个查询放在同一个查询文本中，这时以花括号 ``{}`` 将每个查询包裹起来。每个查询都可以有自己独立的查询选项。执行时，提交的多个查询按照顺序依次执行，直到最后一个查询成功完成，或某个查询报错。整个查询文本的返回结果是最后一个查询的结果。
 
-The ``:assert (some|none)``, ``:ensure`` and ``:ensure_not`` query options allow you to express complicated constraints
-that must be satisfied for your transaction to commit.
+你可以使用 ``:assert (some|none)`` 、 ``:ensure`` 、 ``:ensure_not`` 这些查询选项来表述事务提交时必须满足的约束条件。
 
-This example uses three queries to put and remove rows atomically
-(either all succeed or all fail), and ensure that at the end of the transaction
-an untouched row exists::
-
+在下例中，我们同时提交了三个查询，这三个查询要么全部成功并将修改写入数据库，要么某个失败而数据库不写入任何数据，且保证在查询提交时有一行数据存在于存储表中：
+::
     {
         ?[a, b] <- [[1, 'one'], [3, 'three']]
         :put rel {a => b}
@@ -173,16 +131,10 @@ an untouched row exists::
         :ensure rel {a => b}
     }
 
-When a transaction starts, a snapshot is used,
-so that only already committed data,
-or data written within the same transaction, are visible to queries.
-At the end of the transaction, changes are only committed if there are no conflicts
-and no errors are raised.
-If any mutation activate triggers, those triggers execute in the same transaction.
+查询事务开始执行时，数据库会对所有数据进行快照，任何对数据库的读行为都只会从快照及当前的更改中获取数据。这意味着在查询中查到的数据要么在查询开始前就已经提交至数据库，要么是当前查询文本修改过的数据，不会查到事务开始后其它事务写入的数据。当前数据提交时，如果多个事务提交了互相矛盾的数据，则会报错。如果写入存储表时激活了这些表的触发器，这些触发器也会在同一个事务中执行。
 
-When chaining queries, you can yield the return set of a query to be used in subsequent queries,
-as the following example illustrates::
-
+连锁查询时，可以将前一个查询的结果传递给后面所有的查询使用，例如：
+::
     {
         ?[a] <- [[1]]
         :yield first_yield
@@ -196,66 +148,47 @@ as the following example illustrates::
         ?[a] := second_yield[a]
     }
 
-The final return set should be ``[[1], [2]]``.
-This example is contrived: the most frequent use of this feature is to compute
-some results and to insert various aspects of the results into different
-stored relations.
+这个例子最终的返回结果为 ``[[1], [2]]`` 。在实际应用中，这个功能常常用于先查询出一组数据，然后根据这组数据对多个表进行删改。
 
 ------------------------------------------------------
 触发器与索引
 ------------------------------------------------------
 
-Cozo does not have traditional indices on stored relations.
-Instead, you define regular stored relations that are used as indices.
-At query time, you explicitly query the index instead of the original stored relation.
+Cozo 的存储表没有传统意义上的索引。当你需要使用索引时，你可以建立一个独立的存储表作为索引，并在查询时显性地应用索引表。
 
-You synchronize your indices and the original by ensuring that any mutations you do on the database
-write the correct data to the "canonical" relation and its indices in the same transaction.
-As doing this by hand for every mutation leads to lots of repetitions
-and is error-prone,
-Cozo supports *triggers* to do it automatically for you.
+在对原表增删数据时，必须保证对应的数据变化同时也反映在了索引表中，以保证数据的同步性。如果程序在多个地方对某个存储表都进行增删操作，则在所有这些查询中都手动保证索引的一致性是容易出问题的。这种情况下应该使用 **触发器** 来自动保证索引的同步。
 
-You attach triggers to a stored relation by running the system op ``::set_triggers``::
-
+使用 ``::set_triggers`` 系统操作来设置一个存储表的触发器：
+::
     ::set_triggers <REL_NAME>
 
     on put { <QUERY> }
     on rm { <QUERY> }
     on replace { <QUERY> }
-    on put { <QUERY> } # you can specify as many triggers as you need
+    on put { <QUERY> } # 可以设置任意数量任意种类的触发器
 
-``<QUERY>`` can be any valid query.
+这里面 ``<QUERY>`` 可以是任何查询。
 
-The ``on put`` triggers will run when new data is inserted or upserted,
-which can be activated by ``:put``, ``:create`` and ``:replace`` query options.
-The implicitly defined rules ``_new[]`` and ``_old[]`` can be used in the triggers, and
-contain the added rows and the replaced rows respectively.
+``on put`` 后面的触发器会在数据插入或覆盖后触发： ``:put`` 、 ``:create`` 、 ``:replace`` 均可触发。在触发器中，有两个隐藏的内联表 ``_new[]`` 与 ``_old[]`` 可以在查询中使用，分别包含新插入的行，以及被覆盖的行的旧值。
 
-The ``on rm`` triggers will run when data is deleted, which can be activated by a ``:rm`` query option.
-The implicitly defined rules ``_new[]`` and ``_old[]`` can be used in the triggers,
-and contain the keys of the rows for deleted rows (even if no row with the key actually exist) and the rows
-actually deleted (with both keys and non-keys).
+``on rm`` 触发器会在行被删除时触发：即 ``:rm`` 查询选项可触发。隐藏内联表 ``_new[]`` 与 ``_old[]`` 分别包含删除的键（即使此键在存储表中不存在），以及确实被删除的行的键值。
 
-The ``on replace`` triggers will be activated by a ``:replace`` query option.
-They are run before any ``on put`` triggers.
+``on replace`` 触发器会在执行 ``:replace`` 查询选项时触发。此触发器触发后才会触发任何 ``on put`` 触发器。
 
-All triggers for a relation must be specified together, in the same ``::set_triggers`` system op.
-If used again, all the triggers associated with the stored relation are replaced.
-To remove all triggers from a stored relation, use ``::set_triggers <REL_NAME>`` followed by nothing.
+在设置触发器的 ``::set_triggers`` 系统命令中，所有触发器必须同时一起给出，每次执行此命令会覆盖所设计存储表之前所有的触发器。执行 ``::set_triggers <REL_NAME>`` 命令但不给出任何触发器会删除存储表关联的所有的触发器。
 
-As an example of using triggers to maintain an index, suppose we have the following relation::
-
+下面给出一个使用触发器来保证索引同步性的例子。假设我们有如下原始存储表：
+::
     :create rel {a => b}
 
-We often want to query ``*rel[a, b]`` with ``b`` bound but ``a`` unbound. This will cause a full scan,
-which can be expensive. So we need an index::
-
+但是我们经常需要查询 ``*rel[a, b]`` ，其中 ``b`` 已绑定值，而 ``a`` 未绑定。如果直接这么写，则数据库必须扫描存储表中的所有行，性能较低。所以我们建立一个索引表：
+::
     :create rel.rev {b, a}
 
-In the general case, we cannot assume a functional dependency ``b => a``, so in the index both fields appear as keys.
+由于我们不确定表中数据满足 ``b => a`` 的函数依赖，因此索引表中两列均为键列。
 
-To manage the index automatically::
-
+我们用以下触发器来保证索引表的同步性：
+::
     ::set_triggers rel
 
     on put {
@@ -269,17 +202,12 @@ To manage the index automatically::
         :rm rel.rev{ b, a }
     }
 
-With the index set up, you can use ``*rel.rev{..}`` in place of ``*rel{..}`` in your queries.
+现在索引表就建好了，在查询中我们可以使用 ``*rel.rev{..}`` 来取代 ``*rel{..}`` ，以执行对索引的查询。
 
-Indices in Cozo are manual, but extremely flexible, since you need not conform to any predetermined patterns
-in your use of ``_old[]`` and ``_new[]``.
-For simple queries, the need to explicitly elect to use an index can seem cumbersome,
-but for complex ones, the deterministic evaluation entailed can be a huge blessing.
+Cozo 中的索引必须手动创建，单比传统的索引强大的多，原因是你可以在索引里存任何东西，而并不简单的局限于列的不同排列。妙用隐藏内联表 ``_old[]`` 与 ``_new[]`` 也可以完成一些传统索引做不到的事情。在 Cozo 中，你必须明确指定使用索引，数据库才会这么做，对于简单的查询这可能会显得比较麻烦，但是对于多层复杂的查询，这保证了查询执行的 **确定性** ，反而可以省下很多“优化”的时间。
 
-Triggers can be creatively used for other purposes as well.
+当然，触发器的作用并不局限于同步索引。
 
 .. WARNING::
 
-    Loops in your triggers can cause non-termination.
-    A loop occurs when a relation has triggers which affect other relations,
-    which in turn have other triggers that ultimately affect the starting relation.
+    触发器可以激活其它的触发器，因此触发器可能会造成程序的死循环。触发器间的“递归”一般来说是程序错误，但是 Cozo 并不会在这方面做检查。
