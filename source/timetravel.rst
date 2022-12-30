@@ -2,73 +2,32 @@
 历史穿梭查询
 ==============
 
-Simply put, time travel in a database means tracking changes to data over time 
-and allowing queries to be logically executed at a point in time 
-to get a historical view of the data. 
-In a sense, this makes your database immutable, 
-since nothing is really deleted from the database ever.
-:doc:`This story <releases/v0.4>` gives some motivations why time travel may be valuable.
+在数据库中进行“历史穿梭”意味着需要对数据的所有更改进行记录，并允许提取某个历史时刻的数据快照用来进行查询。从一定意义上来说，可以历史穿梭的数据库也是一个不可变的数据库：因为所有的变更其实都是数据的插入，而永远不会有数据被删除。我们写了一个 :doc:`小故事 <releases/v0.4>` 简单介绍了不可变数据的价值。
 
-In Cozo, a stored relation is eligible for time travel if the last part of its key
-has the explicit type `Validity`.
-A validity has two parts: a time part, represented by a signed integer,
-and an assertion part, represented by a boolean, so ``[42, true]`` represents
-a validity. Sorting of validity is by the timestamp first, then by the assertive flag,
-but each field is compared in descending order, so::
-
+在 Cozo 中，如果一个存储表的键列的最后一列类型为 ``Validity`` （有效性），则此表支持历史穿梭查询。一个有效性包含两部分：一部分是一个时间戳，由一个整数表示，另一部分表明这行数据是插入行为还是删除行为，用布尔值表示，例如 ``[42, true]`` 就是一个有效性。有效性在排序时先按照时间戳倒排，再按照行为布尔值倒排，因此我们有：
+::
     [1, true] < [1, false] < [-1, true]
 
-All rows with identical key parts except the last validity part form
-the *history* for that key, interpreted in the following way:
-the fact represented by a row is *valid* if its flag is ``true``, and
-the range of its validity is from its timestamp (inclusive) up until 
-the timestamp of the next row under the same key (excluding the last validity part,
-and here time is interpreted to flow forward).
-A row with a ``false`` assertive flag does nothing other than 
-making the previous fact invalid. 
+除了最后的有效性之外完全相同的键，组成了这个键的 **历史** ，其语义如下：每行数据代表一个 **事实** ，这个事实的行为值若为真，则从这个事实的时间戳开始（包含时间戳的时刻本身）此事实是 **有效** 的；而如果这个事实的行为值为假，则前一个有效的事实的有效性截止于这个事实的时间戳（不包含时间戳的时刻本身）。行为值为假的行仅仅表明前一事实有效性的终结，其值列数据没有意义。
 
-When querying against such a stored relation, a validity specification can be attached,
-for example::
-
+我们在应用原子中加入有效性声明来进行历史穿梭查询，比如：
+::
     ?[name] := *rel{id: $id, name, @ 789}
 
-The part after the symbol ``@`` is the validity specification and must be a compile-time
-constant, i.e., it cannot contain variables. Logically, it is as if
-the query is against a snapshot of the relation containing only valid facts at the specified timestamp.
+符号 ``@`` 之后的部分就是有效性声明，必须是一个编译时的常量，也就是说可以是一个表达式，但是表达式里面不能含有变量。带有有效性声明的原子应用对存储表的查询，相当于对仅包含在声明时间戳的时刻有效的数据的表的查询。
 
-It is possible for two rows to have identical non-validity key parts and identical 
-timestamps, but differ in their assertive flags. In this case when queried against
-the exact timestamp, the row is valid, as if the row with the ``false`` flag
-does not exist. The use case for this behaviour is to assert a fact only until a future time
-when that fact is sure to remain valid. When that time comes, a new fact can be asserted,
-and if the old fact remains valid there is no need to ``:rm`` the previous retraction.
+两行数据的键列，可以仅仅在行为布尔值这一部分不同，而其它部分都相同。这种情况等价于行为布尔值为假的那行数据不存在，因为那行数据的代表了半开区间的“开”的部分，然后紧接着就是下一个半开区间的“闭”的部分。这种情况有其实际用处：我们可以在声明数据（行为值为真）后紧接着在未来的时间戳撤回此数据（行为值为假）来表示未来的时间戳之后我们不知道情况到底如何。如果在将来某个时刻我们有了更多信息可以预测更久，我们直接再插入一条与最后数据时间戳相同而行为值为真的数据即可，不需要删除那条撤回数据。
 
-You can use the function ``to_bool`` to extract the flag of a validity, 
-and ``to_int`` to extract the timestamp as an integer.
+可以使用函数 ``to_bool`` 来提取有效性中的布尔行为值， 用函数 ``to_int`` 来提取代表时间戳的整数。
 
-In Cozo it is up to you to interpret the timestamp part of validity. If you use it
-to represent calendar time, then it is recommended that you treat it as microseconds since the
-UNIX epoch. For this interpretation, the following convenience are provided:
+有效性中的时间戳的具体含义由用户来决定。如果用户决定其含义为以微秒计算的 UNIX 时间戳，则下列功能可用：
 
-* When putting facts into the database, instead of specifying the exact literal validity
-  as a list of two items, the strings ``ASSERT`` and ``RETRACT`` can be used instead,
-  and is interpreted as assertion and retraction at the current timestamp, respectively.
-  This has the additional guarantee that all insertion operations in the same transaction
-  using this method gets the same timestamp, and furthermore you can also use these strings
-  as the default values for a field, and they will do the right thing.
+* 插入与撤回事实时，如果需要以当前时间作为时间戳，则可以分别以字符串 ``ASSERT`` 及 ``RETRACT`` 来代表。使用字符串来代表当前时间的一个好处是同一个事务中所有由此机制生成的时间戳都保证是一样的。同时，存储表列的默认值可以使用这些字符串，这使得插入数据时可以省略显式声明有效性。
 
-* In place of a list of two items for specifying the literal validity, you can use
-  RFC 3339 strings for assertion timestamps or validity specification in query. 
-  For retraction, prefix the string by ``~``.
+* 插入数据时可以以 RFC 3339 格式的时间字符串来代表行为值为真的有效性。如果在字符串前添加 ``~`` 符号，则代表行为值为假的有效性。
 
-* When specifying validity against a stored relation, the string ``NOW`` uses the current timestamp,
-  and ``END`` uses a timestamp logically at the end of the world. Furthermore, the ``NOW`` timestamp
-  is guaranteed to be the same as what would be inserted using ``ASSERT`` and ``RETRACT``.
+* 在应用原子的有效性声明中，可以以 ``NOW`` 字符串来代表当前的时间戳，且此时间戳与 ``ASSERT`` 、 ``RETRACT`` 在同一事务中生成的时间戳保证相同。除了 ``NOW`` 之外，有效性声明的时间戳也可以是字符串 ``END`` ，这代表“历史的终结”的时间戳。
 
-* You can use the function ``format_timestamp`` to directly format a the timestamp part of a validity to
-  RFC 3339 strings.
+* 函数 ``format_timestamp`` 可以将有效性转换为可读的字符串（RFC 3339 格式）。
 
-An interesting use case of the time travel facility is to pre-generate the whole history for all time,
-and in the user-facing interface query with the current time ``NOW``.
-The effect is that users see an illusion of real-time interactions:
-a manifestation of `Laplace's daemon <https://en.wikipedia.org/wiki/Laplace%27s_demon>`_.
+历史穿梭查询的应用之一是预先写好整个历史的剧本，然后在应用中永远都用 ``NOW`` 来作为有效性声明。这样一来，用户在使用时就会有亲历了历史发展的错觉，而实际上他们的经历背后，任何主动性、自由性都一点儿也没有，都是 `拉普拉斯妖 <https://baike.baidu.com/item/%E6%8B%89%E6%99%AE%E6%8B%89%E6%96%AF%E5%A6%96/886716>`_ 在操作而已。
