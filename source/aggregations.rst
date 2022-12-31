@@ -2,27 +2,20 @@
 聚合
 ==============
 
+Cozo 中的聚合可以理解为作用于一连串值然后返回单个值（聚合值）的函数。
 
-Aggregations in Cozo can be thought of as a function that acts on a stream of values
-and produces a single value (the aggregate).
+Cozo 中的聚合分为两类， **普通聚合** 和 **半晶格聚合** 。所有的半晶格聚合都同时也是普通聚合，但是底层的实现方式不一样。只有半晶格聚合才能用在自递归的规则中。
 
-There are two kinds of aggregations in Cozo, *ordinary aggregations* and *semi-lattice aggregations*.
-They are implemented differently in Cozo, with semi-lattice aggregations generally faster and more powerful
-(only the latter can be used recursively).
+半晶格聚合满足额外的代数性质：
 
-The power of semi-lattice aggregations derive from the additional properties they satisfy: a `semilattice <https://en.wikipedia.org/wiki/Semilattice>`_:
+    幂等性
+        对单个值 ``a`` 进行聚合，值一定为 ``a`` 本身；
+    交换律
+        ``a`` 与 ``b`` 的聚合等于 ``b`` 与 ``a`` 的聚合；
+    结合律
+        聚合时怎么打括号得到的结果都一样。
 
-    idempotency
-        the aggregate of a single value ``a`` is ``a`` itself,
-    commutativity
-        the aggregate of ``a`` then ``b`` is equal to the aggregate of ``b`` then ``a``,
-    associativity
-        it is immaterial where we put the parentheses in an aggregate application.
-
-In auto-recursive semi-lattice aggregations, there are soundness constraints on what can be done on the bindings coming from the auto-recursive parts 
-within the body of the rule. Usually you do not need to worry about this at all since the obvious ways of using this functionality are all sound,
-but as for non-termination due to fresh variables introduced by function applications,
-Cozo does not (and cannot) check for unsoundness in this case.
+在含有半晶格聚合的自递归规则中，理论上来说正文中的变量还需要满足一些额外的安全限制。常见的使用方式里这些限制都是被满足的，但随意使用归一来根据递归结果生成新的值可能会违反这些限制：Cozo 不会（也无法）检查这些有问题的查询。
 
 ------------------------------------
 半晶格聚合
@@ -33,48 +26,47 @@ Cozo does not (and cannot) check for unsoundness in this case.
 
 .. function:: min(x)
 
-    Aggregate the minimum value of all ``x``.
+    最小值。
 
 .. function:: max(x)
 
-    Aggregate the maximum value of all ``x``.
+    最大值。
 
 .. function:: and(var)
 
-    Aggregate the logical conjunction of the variable passed in.
+    所有值的逻辑与。
 
 .. function:: or(var)
 
-    Aggregate the logical disjunction of the variable passed in.
+    所有值的逻辑或。
 
 .. function:: union(var)
 
-    Aggregate the unions of ``var``, which must be a list.
+    所有值（每一个都是数组）的并集。
 
 .. function:: intersection(var)
 
-    Aggregate the intersections of ``var``, which must be a list.
+    所有值（每一个都是数组）的交集。
 
 .. function:: choice(var)
 
-    Returns a non-null value. If all values are null, returns ``null``. Which one is returned is deterministic but implementation-dependent
-    and may change from version to version.
+    从给出的值中抽取一个非空值作为聚合值。若所有值都为空，则聚合值为空。
 
 .. function:: min_cost([data, cost])
 
-    The argument should be a list of two elements and this aggregation chooses the list of the minimum ``cost``.
+    聚合值为 ``cost`` 最小的 ``data`` 。
 
 .. function:: shortest(var)
 
-    ``var`` must be a list. Returns the shortest list among all values. Ties will be broken non-deterministically.
+    聚合值为长度最短的那个数组。
 
 .. function:: bit_and(var)
 
-    ``var`` must be bytes. Returns the bitwise 'and' of the values.
+    比特级别的“与”聚合值。被聚合的值必须都是字节数组。
 
 .. function:: bit_or(var)
 
-    ``var`` must be bytes. Returns the bitwise 'or' of the values.
+    比特级别的“或”聚合值。被聚合的值必须都是字节数组。
 
 ---------------------
 普通聚合
@@ -85,59 +77,42 @@ Cozo does not (and cannot) check for unsoundness in this case.
 
 .. function:: count(var)
 
-    Count how many values are generated for ``var`` (using bag instead of set semantics).
+    计数。
 
 .. function:: count_unique(var)
 
-    Count how many unique values there are for ``var``.
+    计数，重复值只计算一次。
 
 .. function:: collect(var)
 
-    Collect all values for ``var`` into a list.
+    将所有值聚合为一个数组。
 
 .. function:: unique(var)
 
-    Collect ``var`` into a list, keeping each unique value only once.
+    将所有值聚合为一个数组，重复值只保留一份。
 
 .. function:: group_count(var)
 
-    Count the occurrence of unique values of ``var``, putting the result into a list of lists,
-    e.g. when applied to ``'a'``, ``'b'``, ``'c'``, ``'c'``, ``'a'``, ``'c'``, the results is ``[['a', 2], ['b', 1], ['c', 3]]``.
+    对被聚合值按照值进行计数，列：值依次为 ``'a'`` 、 ``'b'`` 、 ``'c'`` 、 ``'c'`` 、 ``'a'`` 、 ``'c'`` ，聚合值为 ``[['a', 2], ['b', 1], ['c', 3]]`` 。
 
 .. function:: bit_xor(var)
 
-    ``var`` must be bytes. Returns the bitwise 'xor' of the values.
+    比特级别的“排他或”聚合。值必须都为字节数组。
 
 .. function:: latest_by([data, time])
 
-    The argument should be a list of two elements and this aggregation returns the ``data`` of the maximum ``time``.
-    This is very similar to ``min_cost``, the differences being that maximum instead of minimum is used,
-    and non-numerical costs are allowed.
-    only ``data`` is returned, and the aggregation is deliberately not a semi-lattice aggregation. 
-    
-    .. NOTE::
-        This aggregation is intended to be used in timestamped audit trails.
-        As an example:: 
-
-            ?[id, latest_by(status_ts)] := *data[id, status, ts], status_ts = [status, ts]
-
-        returns the latest ``status`` for each ``id``. If you do this regularly, consider using the time travelling
-        facility.
+    聚合值为 ``time`` 最大的 ``data`` 。与 ``min_cost`` 类似，但是 ``min_cost`` 中数组里第二个值只能是数字，这里可以是任何类型，且 ``min_cost`` 用的是最小，这里是最大。
 
 .. function:: smallest_by([data, cost])
 
-    The argument should be a list of two elements and this aggregation returns the ``data`` of the minimum ``cost``.
-    Non-numerical costs are allowed, unlike ``min_cost``. The value ``null`` for ``data`` are ignored when comparing.
+    聚合值为 ``cost`` 最小的 ``data`` 。与 ``min_cost`` 类似，但是 ``min_cost`` 中数组里第二个值只能是数字，这里可以是任何类型。当 ``cost`` 为空值时，直接舍弃此数组。
 
 .. function:: choice_rand(var)
 
-    Non-deterministically chooses one of the values of ``var`` as the aggregate.
-    Each value the aggregation encounters has the same probability of being chosen.
+    从值中随机均匀取样一个值作为聚合值。
 
     .. NOTE::
-        This version of ``choice`` is not a semi-lattice aggregation
-        since it is impossible to satisfy the uniform sampling requirement while maintaining no state,
-        which is an implementation restriction unlikely to be lifted.
+        此聚合不是半晶格聚合，因为如果不保存状态，则无法保证均匀采样，而目前的半晶格聚合实现都是无状态的。
 
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 统计聚合
@@ -145,20 +120,20 @@ Cozo does not (and cannot) check for unsoundness in this case.
 
 .. function:: mean(x)
 
-    The mean value of ``x``.
+    平均数。
 
 .. function:: sum(x)
 
-    The sum of ``x``.
+    求和。
 
 .. function:: product(x)
 
-    The product of ``x``.
+    求积。
 
 .. function:: variance(x)
 
-    The sample variance of ``x``.
+    （样本）方差。
 
 .. function:: std_dev(x)
 
-    The sample standard deviation of ``x``.
+    （样本）标准差。

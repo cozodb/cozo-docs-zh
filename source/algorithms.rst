@@ -2,14 +2,9 @@
 工具与算法
 ==============================
 
-Fixed rules in CozoScript apply utilities or algorithms.
+规定规则包括工具与算法两种。
 
-The algorithms described here are only available if your distribution of Cozo is compiled with the ``graph-algo`` feature flag.
-Currently all prebuilt binaries are compiled with this flag on.
-
-Some algorithms make use of multiple threads to greatly improve running time if the ``rayon`` feature flag is on.
-All prebuilt binaries except WASM have this flag on. As a result, and also because of other platform restrictions,
-algorithms on WASM in general run much slower than on other platforms.
+只有在编译时启用了 ``graph-algo`` 选项时，以下叙述的算法规则才可用。目前除了浏览器 WASM 之外的所有预编译发布都启用了此选项。
 
 .. module:: Algo
     :noindex:

@@ -2,65 +2,55 @@
 函数与算符
 ========================
 
-Functions can be used to build expressions.
-
-All functions except those having names starting with ``rand_`` are deterministic.
+函数是表达式的一种。Cozo 中除了读取当前时间的函数和以 ``rand_`` 开头的函数之外，其它所有的函数都是纯函数：给出同样的参数，其值相同。
 
 ------------------------------------
 不是函数
 ------------------------------------
 
-Functions must take in expressions as arguments, evaluate each argument in turn, 
-and then evaluate its implementation to produce a value that can be used in an expression.
-We first describe constructs that look like, but are not functions.
+首先我们来介绍一些不是函数的构造。函数的求值规则是先对其参数求值，然后将参数的值传入函数的正文，得到一个值作为结果。以下这些构造不是函数，因为其不遵守这个规则。
 
-These are language constucts that return Horn clauses instead of expressions:
+首先，以下构造不返回值：
 
-* ``var = expr`` unifies ``expr`` with ``var``. Different from ``expr1 == expr2``.
-* ``not clause`` negates a Horn clause ``clause``. Different from ``!expr`` or ``negate(expr)``.
-* ``clause1 or clause2`` connects two Horn-clauses by disjunction. Different from ``or(expr1, expr2)``.
-* ``clause1 and clause2`` connects two Horn-clauses by conjunction. Different from ``and(expr1, expr2)``.
-* ``clause1, clause2`` connects two Horn-clauses by conjunction.
+* ``var = expr`` 显性地将 ``var`` 与 ``expr`` 归一。注意与算符形式的函数 ``expr1 == expr2`` 的区别。
+* ``not clause`` 将原子 ``clause`` 否定。注意与算符形式的函数 ``!expr`` 以及函数 ``negate(expr)`` 的区别。
+* ``clause1 or clause2`` 将两个原子进行析取。注意与函数 ``or(expr1, expr2)`` 的区别。
+* ``clause1 and clause2`` 将两个原子进行合取。注意与函数 ``and(expr1, expr2)`` 的区别。
+* ``clause1, clause2`` 将两个原子进行合取。
 
-For the last three, ``or`` binds more tightly from ``and``, which in turn binds more tightly than ``,``:
-``and`` and ``,`` are identical in every aspect except their binding powers.
+以上最后三项中， ``or`` 的优先级最高， ``and`` 次之， ``,`` 最低。 ``and`` 与 ``,`` 的唯一区别就是他们的优先级。
 
-These are constructs that return expressions:
+以下构造返回值，但是不是函数：
 
-* ``try(a, b, ...)`` evaluates each argument in turn, stops at the first expression that does not throw and return its value.
-* ``if(a, b, c)`` evaluates ``a``, and if the result is ``true``, evaluate ``b`` and returns its value, otherwise evaluate ``c`` and returns its value.
-  ``a`` must evaluate to a boolean.
-* ``if(a, b)`` same as ``if(a, b, null)``
-* ``cond(a1, b1, a2, b2, ...)`` evaluates ``a1``, if the results is ``true``, returns the value of ``b1``, otherwise continue with
-  ``a2`` and ``b2``. An even number of arguments must be given and the ``a``s must evaluate to booleans.
-  If all ``a``s are ``false``, ``null`` is returned. If you want a catch-all clause at the end,
-  put ``true`` as the condition.
+* ``try(a, b, ...)`` 依次对参数求值，如果求值中没有遇到异常，则直接返回该结果，不对下一个参数求值；若所有参数的求值过程都遇到异常，则抛出最后一个异常。
+* ``if(a, b, c)`` 首先对 ``a`` 求值，若为真，则对 ``b`` 求值并返回其结果，否则对 ``c`` 求值并返回其结果。 ``a`` 的求值结果必须是布尔值。
+* ``if(a, b)`` 与 ``if(a, b, null)`` 等价。
+* ``cond(a1, b1, a2, b2, ...)`` 首先对 ``a1`` 求值，若其值为真，则对 ``b1`` 求值并返回其结果，否则对 ``a2`` 及 ``b2`` 进行相同操作，直到有结果返回。此构造必须给出偶数个参数，且所有的 ``a`` 都必须求值为布尔值。若所有的 ``a`` 的值都为假，则返回空值。若想返回非空的默认值，则可以在最后一对参数的第一个中使用真值作为参数。
 
 ------------------------------------
 函数的算符表达
 ------------------------------------
 
-Some functions have equivalent operator forms, which are easier to type and perhaps more familiar. First the binary operators:
+为了书写简便，一些函数有算符表示。以下是二元算符：
 
-* ``a && b`` is the same as ``and(a, b)``
-* ``a || b`` is the same as ``or(a, b)``
-* ``a ^ b`` is the same as ``pow(a, b)``
-* ``a ++ b`` is the same as ``concat(a, b)``
-* ``a + b`` is the same as ``add(a, b)``
-* ``a - b`` is the same as ``sub(a, b)``
-* ``a * b`` is the same as ``mul(a, b)``
-* ``a / b`` is the same as ``div(a, b)``
-* ``a % b`` is the same as ``mod(a, b)``
-* ``a >= b`` is the same as ``ge(a, b)``
-* ``a <= b`` is the same as ``le(a, b)``
-* ``a > b`` is the same as ``gt(a, b)``
-* ``a < b`` is the same as ``le(a, b)``
-* ``a == b`` is the same as ``eq(a, b)``
-* ``a != b`` is the same as ``neq(a, b)``
-* ``a ~ b`` is the same as ``coalesce(a, b)``
+* ``a && b`` 等价于 ``and(a, b)``
+* ``a || b`` 等价于 ``or(a, b)``
+* ``a ^ b`` 等价于 ``pow(a, b)``
+* ``a ++ b`` 等价于 ``concat(a, b)``
+* ``a + b`` 等价于 ``add(a, b)``
+* ``a - b`` 等价于 ``sub(a, b)``
+* ``a * b`` 等价于 ``mul(a, b)``
+* ``a / b`` 等价于 ``div(a, b)``
+* ``a % b`` 等价于 ``mod(a, b)``
+* ``a >= b`` 等价于 ``ge(a, b)``
+* ``a <= b`` 等价于 ``le(a, b)``
+* ``a > b`` 等价于 ``gt(a, b)``
+* ``a < b`` 等价于 ``le(a, b)``
+* ``a == b`` 等价于 ``eq(a, b)``
+* ``a != b`` 等价于 ``neq(a, b)``
+* ``a ~ b`` 等价于 ``coalesce(a, b)``
 
-These operators have precedence as follows 
-(the earlier rows binds more tightly, and within the same row operators have equal binding power):
+二元算符的优先级如下（以行记，前面的行中所包括的算符优先级高，后面的低；同一行中所有算符有相机相同）：
 
 * ``~``
 * ``^``
@@ -72,15 +62,15 @@ These operators have precedence as follows
 * ``&&``
 * ``||``
 
-With the exception of ``^``, all binary operators are left associative: ``a / b / c`` is the same as
-``(a / b) / c``. ``^`` is right associative: ``a ^ b ^ c`` is the same as ``a ^ (b ^ c)``.
+除 ``^`` 之外，所有二元算符都向左关联，即 ``a / b / c`` 。
+``(a / b) / c`` 。 ``^`` 则向右关联： ``a ^ b ^ c`` 等价于 ``a ^ (b ^ c)`` 。
 
-And the unary operators are:
+一元算符如下：
 
-* ``-a`` is the same as ``minus(a)``
-* ``!a`` is the same as ``negate(a)``
+* ``-a`` 等价于 ``minus(a)``
+* ``!a`` 等价于 ``negate(a)``
 
-Function applications using parentheses bind the tightest, followed by unary operators, then binary operators.
+在需要改变算符顺序时，可以使用括号。括号优先级最高，其次是一元算符，最后是二元算符。
 
 ------------------------
 相等与比较
@@ -91,39 +81,39 @@ Function applications using parentheses bind the tightest, followed by unary ope
     
 .. function:: eq(x, y)
 
-    Equality comparison. The operator form is ``x == y``. The two arguments of the equality can be of different types, in which case the result is ``false``.
+    相等。算符形式为 ``x == y`` 。两个参数如果类型不同，则结果为假值。
 
 .. function:: neq(x, y)
 
-    Inequality comparison. The operator form is ``x != y``. The two arguments of the equality can be of different types, in which case the result is ``true``.
+    不等。算符形式为 ``x != y`` 。两个参数如果类型不同，则结果为真值。
 
 .. function:: gt(x, y)
 
-    Equivalent to ``x > y``
+    大于。算符形式为 ``x > y`` 。
 
 .. function:: ge(x, y)
 
-    Equivalent to ``x >= y``
+    大于等于。算符形式为 ``x >= y`` 。
 
 .. function:: lt(x, y)
 
-    Equivalent to ``x < y``
+    小于。算符形式为 ``x < y`` 。
 
 .. function:: le(x, y)
 
-    Equivalent to ``x <= y``
+    小于等于。算符形式为 ``x <= y`` 。
 
 .. NOTE::
 
-    The four comparison operators can only compare values of the same runtime type. Integers and floats are of the same type ``Number``.
+    大小比较的两个参数必须隶属于同类型，否则会报错。在 Cozo 中，整数与浮点数的运行时类型相同，都是 ``Number`` 。
 
 .. function:: max(x, ...)
 
-    Returns the maximum of the arguments. Can only be applied to numbers.
+    返回参数中的最大值。所有参数都必须是数字。
 
 .. function:: min(x, ...)
 
-    Returns the minimum of the arguments. Can only be applied to numbers.
+    返回参数中的最小值。所有参数都必须是数字。
 
 ------------------------
 布尔函数
@@ -134,19 +124,19 @@ Function applications using parentheses bind the tightest, followed by unary ope
     
 .. function:: and(...)
 
-    Variadic conjunction. For binary arguments it is equivalent to ``x && y``.
+    接受任意个参数的合取。二元形式等价于 ``x && y`` 。
 
 .. function:: or(...)
 
-    Variadic disjunction. For binary arguments it is equivalent to ``x || y``.
+    接受任意个参数的析取。二元形式等价于 ``x || y`` 。
 
 .. function:: negate(x)
 
-    Negation. Equivalent to ``!x``.
+    否定。等价于 ``!x`` 。
 
 .. function:: assert(x, ...)
 
-    Returns ``true`` if ``x`` is ``true``, otherwise will raise an error containing all its arguments as the error message.
+    若 ``x`` 为真则返回真，否则抛出异常。给出多个参数时其它参数会包含在异常中，可以作为错误信息。
 
 ------------------------
 数学函数
@@ -157,152 +147,145 @@ Function applications using parentheses bind the tightest, followed by unary ope
     
 .. function:: add(...)
 
-    Variadic addition. The binary version is the same as ``x + y``.
+    多参数形式的加法。二元形式等价于 ``x + y`` 。
 
 .. function:: sub(x, y)
 
-    Equivalent to ``x - y``.
+    减法，等价于 ``x - y`` 。
 
 .. function:: mul(...)
 
-    Variadic multiplication. The binary version is the same as ``x * y``.
+    多参数形式的乘法。二元形式等价于 ``x * y`` 。
 
 .. function:: div(x, y)
 
-    Equivalent to ``x / y``.
+    除法，等价于 ``x / y`` 。
 
 .. function:: minus(x)
 
-    Equivalent to ``-x``.
+    求负，等价于 ``-x`` 。
 
 .. function:: pow(x, y)
 
-    Raises ``x`` to the power of ``y``. Equivalent to ``x ^ y``. Always returns floating number.
+    ``x`` 的 ``y`` 次方。等价于 ``x ^ y`` 。返回浮点数，即使参数都是整数。
 
 .. function:: mod(x, y)
 
-    Returns the remainder when ``x`` is divided by ``y``. Arguments can be floats. The returned value has the same sign as ``x``.  Equivalent to ``x % y``.
+    ``x`` 对 ``y`` 求模（余数）。参数可以是浮点数。返回的值的符号与 ``x`` 相同。等价于 ``x % y`` 。
 
 .. function:: abs(x)
 
-    Returns the absolute value.
+    绝对值。
 
 .. function:: signum(x)
 
-    Returns ``1``, ``0`` or ``-1``, whichever has the same sign as the argument, e.g. ``signum(to_float('NEG_INFINITY')) == -1``, ``signum(0.0) == 0``, but ``signum(-0.0) == -1``. Returns ``NAN`` when applied to ``NAN``.
+    返回 ``1`` 、 ``0`` 或 ``-1`` 中与所传参数符号一样的数，比如 ``signum(to_float('NEG_INFINITY')) == -1`` ， ``signum(0.0) == 0`` ，但是 ``signum(-0.0) == -1`` 。如果参数为 ``NAN`` 则返回 ``NAN`` 。
 
 .. function:: floor(x)
 
-    Returns the floor of ``x``.
+    向下求整。
 
 .. function:: ceil(x)
 
-    Returns the ceiling of ``x``.
+    向上求整。
 
 .. function:: round(x)
 
-    Returns the nearest integer to the argument (represented as Float if the argument itself is a Float). Round halfway cases away from zero. E.g. ``round(0.5) == 1.0``, ``round(-0.5) == -1.0``, ``round(1.4) == 1.0``.
+    四舍五入。当遇到点五时，取离 0 远的值，如 ``round(0.5) == 1.0`` ， ``round(-0.5) == -1.0`` ， ``round(1.4) == 1.0`` 。
 
 .. function:: exp(x)
 
-    Returns the exponential of the argument, natural base.
+    指数函数，以自然对数 e 为底。
 
 .. function:: exp2(x)
 
-    Returns the exponential base 2 of the argument. Always returns a float.
+    指数函数，以 2 为底。即使参数是整数也返回浮点数。
 
 .. function:: ln(x)
 
-    Returns the natual logarithm.
+    对数函数，以自然对数为底。
 
 .. function:: log2(x)
 
-    Returns the logarithm base 2.
+    对数函数，以 2 为底。
 
 .. function:: log10(x)
 
-    Returns the logarithm base 10.
+    对数函数，以 10 为底。
 
 .. function:: sin(x)
 
-    The sine trigonometric function.
+    正弦函数。
 
 .. function:: cos(x)
 
-    The cosine trigonometric function.
+    余弦函数。
 
 .. function:: tan(x)
 
-    The tangent trigonometric function.
+    正切函数。
 
 .. function:: asin(x)
 
-    The inverse sine.
+    正弦函数的反函数。
 
 .. function:: acos(x)
 
-    The inverse cosine.
+    余弦函数的反函数。
 
 .. function:: atan(x)
 
-    The inverse tangent.
+    正切函数的反函数。
 
 .. function:: atan2(x, y)
 
-    The inverse tangent `atan2 <https://en.wikipedia.org/wiki/Atan2>`_ by passing `x` and `y` separately.
+    正切函数的反函数，同时传入两个参数，对这两个参数的比做反正切，并使用这两个参数的符号来决定返回值的象限。
 
 .. function:: sinh(x)
 
-    The hyperbolic sine.
+    双曲正弦函数。
 
 .. function:: cosh(x)
 
-    The hyperbolic cosine.
+    双曲余弦函数。
 
 .. function:: tanh(x)
 
-    The hyperbolic tangent.
+    双曲正切函数。
 
 .. function:: asinh(x)
 
-    The inverse hyperbolic sine.
+    双曲正弦函数的反函数。
 
 .. function:: acosh(x)
 
-    The inverse hyperbolic cosine.
+    双曲余弦函数的反函数。
 
 .. function:: atanh(x)
 
-    The inverse hyperbolic tangent.
+    双曲正切函数的反函数。
 
 .. function:: deg_to_rad(x)
 
-    Converts degrees to radians.
+    将角度转换为弧度。
 
 .. function:: rad_to_deg(x)
 
-    Converts radians to degrees.
+    将弧度转换为角度。
 
 .. function:: haversine(a_lat, a_lon, b_lat, b_lon)
 
-    Computes with the `haversine formula <https://en.wikipedia.org/wiki/Haversine_formula>`_
-    the angle measured in radians between two points ``a`` and ``b`` on a sphere
-    specified by their latitudes and longitudes. The inputs are in radians.
-    You probably want the next function when you are dealing with maps,
-    since most maps measure angles in degrees instead of radians.
+    给出球面上两点的两对经纬度，使用 `半正矢公式 <https://baike.baidu.com/item/%E5%8D%8A%E6%AD%A3%E7%9F%A2>`_ 来计算他们之间的夹角。经纬度都以弧度给出。由于地图上的经纬度通常以角度给出，下一个函数更常用一些。
 
 .. function:: haversine_deg_input(a_lat, a_lon, b_lat, b_lon)
 
-    Same as the previous function, but the inputs are in degrees instead of radians.
-    The return value is still in radians.
+    与上面的函数的唯一区别是经纬度参数以角度而不是弧度给出。返回的值仍然是弧度而不是角度。
 
-    If you want the approximate distance measured on the surface of the earth instead of the angle between two points,
-    multiply the result by the radius of the earth,
-    which is about ``6371`` kilometres, ``3959`` miles, or ``3440`` nautical miles.
+    计算球面表面两点的球面距离时，将返回值乘以球的半径。比如地球的半径为 ``6371`` 公里，或 ``3959`` 英里，或 ``3440`` 海里。
 
     .. NOTE::
 
-        The haversine formula, when applied to the surface of the earth, which is not a perfect sphere, can result in an error of less than one percent.
+        由于地球并不是精确的球体，所以用此函数来计算距离时会有一定的误差，误差在百分之一之内。
 
 ------------------------
 字符串函数
@@ -313,78 +296,69 @@ Function applications using parentheses bind the tightest, followed by unary ope
 
 .. function:: length(str)
 
-    Returns the number of Unicode characters in the string.
-
-    Can also be applied to a list or a byte array.
-
+    返回字符串中含有的 Unicode 字符的数量。参数也可以是数组。
 
     .. WARNING::
 
-        ``length(str)`` does not return the number of bytes of the string representation.
-        Also, what is returned depends on the normalization of the string.
-        So if such details are important, apply ``unicode_normalize`` before ``length``.
+        ``length(str)`` 返回的不是字符串的字节长度，且两个等价的 Unicode 字符串可能规范化形式不同，而导致它们的长度不同。遇到这种情况时建议使用先对字符串使用 ``unicode_normalize`` 函数来保证统一的规范化形式，然后再使用 ``length`` 函数。
 
 
 .. function:: concat(x, ...)
 
-    Concatenates strings. Equivalent to ``x ++ y`` in the binary case.
 
-    Can also be applied to lists.
+    串联字符串。二元形式等价于 ``x ++ y`` 。参数也可以都是数组。
 
 .. function:: str_includes(x, y)
 
-    Returns ``true`` if ``x`` contains the substring ``y``, ``false`` otherwise.
+    如果字符串 ``x`` 包含 字符串 ``y`` 的内容，则返回真，否则返回假。
 
 .. function:: lowercase(x)
 
-    Convert to lowercase. Supports Unicode.
+    将字符串转换为小写。支持 Unicode。
 
 .. function:: uppercase(x)
 
-    Converts to uppercase. Supports Unicode.
+    将字符串转换为大写。支持 Unicode。
 
 .. function:: trim(x)
 
-    Removes `whitespace <https://en.wikipedia.org/wiki/Whitespace_character>`_ from both ends of the string.
+    删除字符串两头的空白字符。空白字符由 Unicode 标准定义。
 
 .. function:: trim_start(x)
 
-    Removes `whitespace <https://en.wikipedia.org/wiki/Whitespace_character>`_ from the start of the string.
+    删除字符串开头的空白字符。空白字符由 Unicode 标准定义。
 
 .. function:: trim_end(x)
 
-    Removes `whitespace <https://en.wikipedia.org/wiki/Whitespace_character>`_ from the end of the string.
+    删除字符串结尾的空白字符。空白字符由 Unicode 标准定义。
 
 .. function:: starts_with(x, y)
 
-    Tests if ``x`` starts with ``y``.
+    检查字符串 ``x`` 是否以 ``y`` 为前缀。
 
     .. TIP::
 
-        ``starts_with(var, str)`` is preferred over equivalent (e.g. regex) conditions,
-        since the compiler may more easily compile the clause into a range scan.
+        使用 ``starts_with(var, str)`` 而不是等价的正则表达式可以帮助系统更好的优化查询：在一定情况下系统可以使用范围扫描而不是全局扫描。
 
 .. function:: ends_with(x, y)
 
-    tests if ``x``  ends with ``y``.
+    检查字符串 ``x`` 是否以 ``y`` 结尾。
 
 .. function:: unicode_normalize(str, norm)
 
-    Converts ``str`` to the `normalization <https://en.wikipedia.org/wiki/Unicode_equivalence>`_ specified by ``norm``.
-    The valid values of ``norm`` are ``'nfc'``, ``'nfd'``, ``'nfkc'`` and ``'nfkd'``.
+    对字符串 ``str`` 进行 Unicode 规范化。规范化种类 ``norm`` 可以是 ``'nfc'`` 、 ``'nfd'`` 、 ``'nfkc'`` 或 ``'nfkd'`` 。
 
 .. function:: chars(str)
 
-    Returns Unicode characters of the string as a list of substrings.
+    返回字符串中所含的 Unicode 字符。
 
 .. function:: from_substrings(list)
 
-    Combines the strings in ``list`` into a big string. In a sense, it is the inverse function of ``chars``.
+    将一个字符串的数组组合成一个字符串。可以说是 ``chars`` 的逆函数。
 
     .. WARNING::
 
-        If you want substring slices, indexing strings, etc., first convert the string to a list with ``chars``,
-        do the manipulation on the list, and then recombine with ``from_substring``.
+        由于 Unicode 的复杂性，Cozo 中的字符串不能以整数作为索引来查询特定位置的字符。如果查询时需要此功能，则需要先使用 ``chars`` 将其转化为数组。
 
 --------------------------
 数组函数
@@ -395,87 +369,79 @@ Function applications using parentheses bind the tightest, followed by unary ope
 
 .. function:: list(x, ...)
 
-    Constructs a list from its argument, e.g. ``list(1, 2, 3)``. Equivalent to the literal form ``[1, 2, 3]``.
+    将参数组成一个数组。 ``list(1, 2, 3)`` 等价于 ``[1, 2, 3]`` 。
 
 .. function:: is_in(el, list)
 
-    Tests the membership of an element in a list.
+    测试元素是否在数组中。
 
 .. function:: first(l)
 
-    Extracts the first element of the list. Returns ``null`` if given an empty list.
+    提取数组中的第一个元素。空数组返回空值。
 
 .. function:: last(l)
 
-    Extracts the last element of the list. Returns ``null`` if given an empty list.
+    提取数组中的最后一个元素。空数组返回空值。
 
 .. function:: get(l, n)
 
-    Returns the element at index ``n`` in the list ``l``. Raises an error if the access is out of bounds. Indices start with 0.
+    返回数组中索引为 ``n`` 的元素，索引为整数，从 0 开始。若索引在范围之外则报错。
 
 .. function:: maybe_get(l, n)
 
-    Returns the element at index ``n`` in the list ``l``. Returns ``null`` if the access is out of bounds. Indices start with 0.
+    返回数组中索引为 ``n`` 的元素，索引为整数，从 0 开始。若索引在范围之外则返回空值。
 
 .. function:: length(list)
 
-    Returns the length of the list.
-
-    Can also be applied to a string or a byte array.
+    返回数组的长度。也可以对字节数组及字符串使用。
 
 .. function:: slice(l, start, end)
 
-    Returns the slice of list between the index ``start`` (inclusive) and ``end`` (exclusive).
-    Negative numbers may be used, which is interpreted as counting from the end of the list.
-    E.g. ``slice([1, 2, 3, 4], 1, 3) == [2, 3]``, ``slice([1, 2, 3, 4], 1, -1) == [2, 3]``.
+    从索引值 ``start`` 开始（含）到索引值 ``end`` 为止（不含），取参数数组的子数组。索引值可以为负数，意义为从数组结尾开始计算的索引。例： ``slice([1, 2, 3, 4], 1, 3) == [2, 3]`` 、 ``slice([1, 2, 3, 4], 1, -1) == [2, 3]`` 。
 
 .. function:: concat(x, ...)
 
-    Concatenates lists. The binary case is equivalent to `x ++ y`.
-
-    Can also be applied to strings.
+    将参数数组组成一个数组。二元形式等价于 ``x ++ y`` 。参数也可以是字符串。
 
 .. function:: prepend(l, x)
 
-    Prepends ``x`` to ``l``.
+    将元素 ``x`` 插入 ``l`` 的最前端。
 
 .. function:: append(l, x)
 
-    Appends ``x`` to ``l``.
+    将元素 ``x`` 插入 ``l`` 的最后端。
 
 .. function:: reverse(l)
 
-    Reverses the list.
+    倒转数组。
 
 .. function:: sorted(l)
 
-    Sorts the list and returns the sorted copy.
+    对数组进行排序，返回排序后的结果。
 
 .. function:: chunks(l, n)
 
-    Splits the list ``l`` into chunks of ``n``, e.g. ``chunks([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]]``.
+    将数组切为长度为 ``n`` 的多个数组，最后一个数组可能长度不够，例： ``chunks([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]]`` 。
 
 .. function:: chunks_exact(l, n)
 
-    Splits the list ``l`` into chunks of ``n``, discarding any trailing elements, e.g. ``chunks([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4]]``.
+    将数组切为长度为 ``n`` 的多个数组，如果最后一个数组长度不够则舍弃之，例： ``chunks([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4]]`` 。
 
 .. function:: windows(l, n)
 
-    Splits the list ``l`` into overlapping windows of length ``n``. e.g. ``windows([1, 2, 3, 4, 5], 3) == [[1, 2, 3], [2, 3, 4], [3, 4, 5]]``.
+    返回数组中长度为 ``n`` 的滑动窗口，例： ``windows([1, 2, 3, 4, 5], 3) == [[1, 2, 3], [2, 3, 4], [3, 4, 5]]`` 。
 
 .. function:: union(x, y, ...)
 
-    Computes the set-theoretic union of all the list arguments.
+    返回给定参数（每个参数都代表一个集合）的联合。
 
 .. function:: intersection(x, y, ...)
 
-    Computes the set-theoretic intersection of all the list arguments.
+    返回给定参数（每个参数都代表一个集合）的交叉。
 
 .. function:: difference(x, y, ...)
 
-    Computes the set-theoretic difference of the first argument with respect to the rest.
-
-
+    返回第一个参数对其它参数（每个参数都代表一个集合）的差异。
 
 ----------------
 二进制函数
@@ -486,44 +452,42 @@ Function applications using parentheses bind the tightest, followed by unary ope
 
 .. function:: length(bytes)
 
-    Returns the length of the byte array.
-
-    Can also be applied to a list or a string.
+    返回字节数组的长度。也接受字符串及数组为参数。
 
 .. function:: bit_and(x, y)
 
-    Calculate the bitwise and. The two bytes must have the same lengths.
+    返回两个字节数组比特级别的与。两个字节数组长度必须一致。
 
 .. function:: bit_or(x, y)
 
-    Calculate the bitwise or. The two bytes must have the same lengths.
+    返回两个字节数组比特级别的或。两个字节数组长度必须一致。
 
 .. function:: bit_not(x)
 
-    Calculate the bitwise not.
+    返回字节数组比特级别的非。
 
 .. function:: bit_xor(x, y)
 
-    Calculate the bitwise xor. The two bytes must have the same lengths.
+    返回两个字节数组比特级别的排他或。两个字节数组长度必须一致。
 
 .. function:: pack_bits([...])
 
-    packs a list of booleans into a byte array; if the list is not divisible by 8, it is padded with ``false``.
+    将一个包含布尔值的数组转换为一个字节数组。若参数中的数组长度不能被 8 整除，则以假值补足再转换。
 
 .. function:: unpack_bits(x)
 
-    Unpacks a byte array into a list of booleans.
+    将字节数组转换为布尔值的数组。
 
 .. function:: encode_base64(b)
 
-    Encodes the byte array ``b`` into the `Base64 <https://en.wikipedia.org/wiki/Base64>`_-encoded string.
+    将字节数组使用 Base64 编码为字符串。
 
     .. NOTE::
-        ``encode_base64`` is automatically applied when output to JSON since JSON cannot represent bytes natively.
+        对列进行类型转化时，若列的类型为字节数组，则会自动套用此函数。
 
 .. function:: decode_base64(str)
 
-    Tries to decode the ``str`` as a `Base64 <https://en.wikipedia.org/wiki/Base64>`_-encoded byte array.
+    尝试将字节使用 Base64 编码解码为字节数组。
 
 
 --------------------------------
@@ -535,101 +499,96 @@ Function applications using parentheses bind the tightest, followed by unary ope
 
 .. function:: coalesce(x, ...)
 
-    Returns the first non-null value; `coalesce(x, y)` is equivalent to `x ~ y`.
+    聚凝算符，即返回第一个非空的值。若所有值都为空则返回空。二元形式等价于 ``x ~ y`` 。
 
 .. function:: to_string(x)
 
-    Convert ``x`` to a string: the argument is unchanged if it is already a string, otherwise its JSON string representation will be returned.
+    将参数转换为字符串。如参数本身就是字符串，则不做变更，否则使用 JSON 的字符串表示形式。
 
 .. function:: to_float(x)
 
-    Tries to convert ``x`` to a float. Conversion from numbers always succeeds. Conversion from strings has the following special cases in addition to the usual string representation:
+    将参数转换为浮点数。不管参数是什么，此函数都不会抛出异常，当无法转换时会返回特殊的浮点数 ``NAN``。以下是一些可转换的特殊字符串：
 
-    * ``INF`` is converted to infinity;
-    * ``NEG_INF`` is converted to negative infinity;
-    * ``NAN`` is converted to NAN (but don't compare NAN by equality, use ``is_nan`` instead);
-    * ``PI`` is converted to pi (3.14159...);
-    * ``E`` is converted to the base of natural logarithms, or Euler's constant (2.71828...).
+    * ``INF`` 转换为正无穷大；
+    * ``NEG_INF`` 转换为负无穷大；
+    * ``NAN`` 转换为 ``NAN`` （两个 ``NAN`` 不相等：若要检查值是否为 ``NAN``，需要使用 ``is_nan`` 函数）；
+    * ``PI`` 转换为圆周率（3.14159...）；
+    * ``E`` 转换为自然对数的底（欧拉常数之一，2.71828...）。
 
-    Converts `null` and `false` to `0.0`, `true` to `1.0`
+    空值与假值转换为 ``0.0`` ，真值转换为 ``1.0`` 。
 
 .. function:: to_int(x)
 
-    Converts to an integer. If ``x`` is a validity, extracts the timestamp as an integer.
+    将参数转换为整数。当参数为有效性时，提取有效性中的整数时间戳。
 
 .. function:: to_unity(x)
 
-    Tries to convert ``x`` to ``0`` or ``1``: ``null``, ``false``, ``0``, ``0.0``, ``""``, ``[]``, and the empty bytes are converted to ``0``,
-    and everything else is converted to ``1``.
-
-    This is useful in conjunction with aggregation functions. 
-    For example, ``?[x, count(x)] := rel[x, y], y > 3`` with a filter in the body omit groups that are completely filtered out.
-    Instead, use ``?[x, sum(should_count)] := rel[x, y], should_count = to_unity(y > 3)``.
+    将参数转换为 ``0`` 或 ``1`` ：空值、假值、 ``0`` 、 ``0.0`` 、 ``""`` 、 ``[]`` 、空字节数组转换为 ``0`` ，其余都转换为 ``1`` 。
 
 .. function:: to_bool(x)
 
-    Tries to convert ``x`` to a boolean. The following are converted to ``false``, and everything else is converted to ``true``:
+    将参数转换为布尔值。以下转换为假值，其他所有值转换为真值：
 
     * ``null``
     * ``false``
-    * ``0``, ``0.0``
-    * ``""`` (empty string)
-    * the empty byte array
-    * the nil UUID (all zeros)
-    * ``[]`` (the empty list)
-    * any validity that is a retraction
+    * ``0`` ， ``0.0``
+    * ``""`` 空字符串
+    * 空字节数组
+    * 空 UUID （所有字节都为 0）
+    * ``[]`` 空数组
+    * 所有行为值为假的有效性
 
 .. function:: to_uuid(x)
 
-    Tries to convert ``x`` to a UUID. The input must either be a hyphenated UUID string representation or already a UUID for it to succeed.
+    将参数转换为 UUID。如果参数不是 UUID 或合法的 UUID 字符串表示，则报错。
 
 .. function:: uuid_timestamp(x)
 
-    Extracts the timestamp from a UUID version 1, as seconds since the UNIX epoch. If the UUID is not of version 1, ``null`` is returned. If ``x`` is not a UUID, an error is raised.
+    从 UUID v1 中提取时间戳的浮点数，以秒为单位。如果 UUID 版本不是 1，则返回空值。若参数不是 UUID 则报错。
 
 .. function:: is_null(x)
 
-    Checks for ``null``.
+    测试参数是否为空值。
 
 .. function:: is_int(x)
 
-    Checks for integers.
+    测试参数是否为整数。
 
 .. function:: is_float(x)
 
-    Checks for floats.
+    测试参数是否为浮点数。
 
 .. function:: is_finite(x)
 
-    Returns ``true`` if ``x`` is an integer or a finite float.
+    测试参数是否为有限的数字。
 
 .. function:: is_infinite(x)
 
-    Returns ``true`` if ``x`` is infinity or negative infinity.
+    测试参数是否为无穷的浮点数。
 
 .. function:: is_nan(x)
 
-    Returns ``true`` if ``x`` is the special float ``NAN``. Returns ``false`` when the argument is not of number type.
+    测试参数是否是特殊的浮点数 ``NAN`` 。
 
 .. function:: is_num(x)
 
-    Checks for numbers.
+    测试参数是否为数字。
 
 .. function:: is_bytes(x)
 
-    Checks for bytes.
+    测试参数是否为字节数组。
 
 .. function:: is_list(x)
 
-    Checks for lists.
+    测试参数是否为数组。
 
 .. function:: is_string(x)
 
-    Checks for strings.
+    测试参数是否为字符串。
 
 .. function:: is_uuid(x)
 
-    Checks for UUIDs.
+    测试参数是否为 UUID。
 
 -----------------
 随机函数
@@ -640,28 +599,27 @@ Function applications using parentheses bind the tightest, followed by unary ope
 
 .. function:: rand_float()
 
-    Generates a float in the interval [0, 1], sampled uniformly.
+    返回在闭区间 [0, 1] 内均匀采样的浮点数。
 
 .. function:: rand_bernoulli(p)
 
-    Generates a boolean with probability ``p`` of being ``true``.
+    返回随机的布尔值，以几率 ``p`` 返回真值。
 
 .. function:: rand_int(lower, upper)
 
-    Generates an integer within the given bounds, both bounds are inclusive.
+    返回所给闭区间内的随机整数，均匀采样。
 
 .. function:: rand_choose(list)
 
-    Randomly chooses an element from ``list`` and returns it. If the list is empty, it returns ``null``.
+    随机返回数组中的一个元素，随机采样。若数组为空则返回空值。
 
 .. function:: rand_uuid_v1()
 
-    Generate a random UUID, version 1 (random bits plus timestamp).
-    The resolution of the timestamp part is much coarser on WASM targets than the others.
+    生成一个随机的 UUID v1（包含当前时间戳）。在浏览器中的时间戳精度比原生程序的低很多。
 
 .. function:: rand_uuid_v4()
 
-    Generate a random UUID, version 4 (completely random bits).
+    生成一个随机的 UUID v4。
 
 ------------------
 正则表达式函数
@@ -672,81 +630,80 @@ Function applications using parentheses bind the tightest, followed by unary ope
 
 .. function:: regex_matches(x, reg)
 
-    Tests if ``x`` matches the regular expression ``reg``.
+    测试字符串能否被正则表达式匹配。
 
 .. function:: regex_replace(x, reg, y)
 
-    Replaces the first occurrence of the pattern ``reg`` in ``x`` with ``y``.
+    将字符串 ``x`` 中被正则表达式匹配上的第一处替换为 ``y`` 。
 
 .. function:: regex_replace_all(x, reg, y)
 
-    Replaces all occurrences of the pattern ``reg`` in ``x`` with ``y``.
+    将字符串 ``x`` 中被正则表达式匹配上的所有地方都替换为 ``y`` 。
 
 .. function:: regex_extract(x, reg)
 
-    Extracts all occurrences of the pattern ``reg`` in ``x`` and returns them in a list.
+    将字符串中所有被正则表达式匹配上的地方放在一个数组中返回。
 
 .. function:: regex_extract_first(x, reg)
 
-    Extracts the first occurrence of the pattern ``reg`` in ``x`` and returns it. If none is found, returns ``null``.
+    返回字符串中被正则表达式匹配上的第一处。如果没有匹配则返回空值。
 
 
 ^^^^^^^^^^^^^^^^^
 正则表达式语法
 ^^^^^^^^^^^^^^^^^
 
-Matching one character::
+单个字符：
+::
+    .             除了换行之外的任何字符
+    \d            数字 (\p{Nd})
+    \D            非数字
+    \pN           单个字母表示的 Unicode 字符类
+    \p{Greek}     Unicode 字符类
+    \PN           单个字母表示的 Unicode 字符类的补集
+    \P{Greek}     Unicode 字符类的补集
 
-    .             any character except new line
-    \d            digit (\p{Nd})
-    \D            not digit
-    \pN           One-letter name Unicode character class
-    \p{Greek}     Unicode character class (general category or script)
-    \PN           Negated one-letter name Unicode character class
-    \P{Greek}     negated Unicode character class (general category or script)
+字符集：
+::
+    [xyz]         单个字符 x 或 y 或 z
+    [^xyz]        除了 x 、 y 、 z 以外的所有单个字符
+    [a-z]         在 a-z 范围内的单个字符
+    [[:alpha:]]   ASCII 字符类（[A-Za-z]）
+    [[:^alpha:]]  ASCII 字符类的补集（[^A-Za-z]）
+    [x[^xyz]]     包含潜逃的字符类
+    [a-y&&xyz]    交集（匹配 x 或 y）
+    [0-9&&[^4]]   使用交集与补集来做差异
+    [0-9--4]      差异（匹配 0-9，但是 4 除外）
+    [a-g~~b-h]    对称差异（仅匹配 a 与 h）
+    [\[\]]        字符集中的转义（匹配 [ 或 ]）
 
-Character classes::
+组合：
+::
+    xy    串联（x 后面紧接着 y）
+    x|y   交替（x 或者 y，都可以的时候优先 x）
 
-    [xyz]         A character class matching either x, y or z (union).
-    [^xyz]        A character class matching any character except x, y and z.
-    [a-z]         A character class matching any character in range a-z.
-    [[:alpha:]]   ASCII character class ([A-Za-z])
-    [[:^alpha:]]  Negated ASCII character class ([^A-Za-z])
-    [x[^xyz]]     Nested/grouping character class (matching any character except y and z)
-    [a-y&&xyz]    Intersection (matching x or y)
-    [0-9&&[^4]]   Subtraction using intersection and negation (matching 0-9 except 4)
-    [0-9--4]      Direct subtraction (matching 0-9 except 4)
-    [a-g~~b-h]    Symmetric difference (matching `a` and `h` only)
-    [\[\]]        Escaping in character classes (matching [ or ])
+重复：
+::
+    x*        零或多个 x（贪婪匹配）
+    x+        一或多个 x（贪婪匹配）
+    x?        零或一个 x（贪婪匹配）
+    x*?       零或多个 x（惰性匹配）
+    x+?       一或多个 x（惰性匹配）
+    x??       零或一个 x（惰性匹配）
+    x{n,m}    至少 n 个，至多 m 个 x（贪婪匹配）
+    x{n,}     至少 n 个 x（贪婪匹配）
+    x{n}      正好 n 个 x（贪婪匹配）
+    x{n,m}?   至少 n 个，至多 m 个 x（惰性匹配）
+    x{n,}?    至少 n 个 x（惰性匹配）
+    x{n}?     正好 n 个 x（惰性匹配）
 
-Composites::
-
-    xy    concatenation (x followed by y)
-    x|y   alternation (x or y, prefer x)
-
-Repetitions::
-
-    x*        zero or more of x (greedy)
-    x+        one or more of x (greedy)
-    x?        zero or one of x (greedy)
-    x*?       zero or more of x (ungreedy/lazy)
-    x+?       one or more of x (ungreedy/lazy)
-    x??       zero or one of x (ungreedy/lazy)
-    x{n,m}    at least n x and at most m x (greedy)
-    x{n,}     at least n x (greedy)
-    x{n}      exactly n x
-    x{n,m}?   at least n x and at most m x (ungreedy/lazy)
-    x{n,}?    at least n x (ungreedy/lazy)
-    x{n}?     exactly n x
-
-Empty matches::
-
-    ^     the beginning of the text
-    $     the end of the text
-    \A    only the beginning of the text
-    \z    only the end of the text
-    \b    a Unicode word boundary (\w on one side and \W, \A, or \z on the other)
-    \B    not a Unicode word boundary
+空匹配::
+    ^     文本起始处
+    $     文本结束处
+    \A    仅文本起始处
+    \z    仅文本结束处
+    \b    Unicode 词语边界（以 \w 开始，以 \W、\A 或 \z 结束）
+    \B    不是 Unicode 词语边界
 
 
 --------------------
@@ -755,16 +712,14 @@ Empty matches::
 
 .. function:: now()
 
-    Returns the current timestamp as seconds since the UNIX epoch.
-    The resolution is much coarser on WASM targets than the others.
+    返回当前的 UNIX 时间戳（以秒计，浮点数）。浏览器中的精度比原生程序的低得多。
 
 .. function:: format_timestamp(ts, tz?)
 
-    Interpret ``ts`` as seconds since the epoch and format as a string according to `RFC3339 <https://www.rfc-editor.org/rfc/rfc3339>`_.
-    If ``ts`` is a validity, its timestamp will be converted to seconds and used.
+    将浮点数 UNIX 时间戳 ``ts`` （以秒计）根据 RFC 3339 标准转换为字符串。若 ``ts`` 为有效性，则使用其中以微秒计的整数时间戳。
 
-    If a second string argument is provided, it is interpreted as a `timezone <https://en.wikipedia.org/wiki/Tz_database>`_ and used to format the timestamp.
+    可选的第二个参数指定字符串显示的市区，格式为 UNIX 系统中的格式。
 
 .. function:: parse_timestamp(str)
 
-    Parse ``str`` into seconds since the epoch according to RFC3339.
+    根据 RFC 3339 标准将字符串转换为浮点数时间戳（以秒计）。

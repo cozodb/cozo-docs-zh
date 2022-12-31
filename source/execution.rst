@@ -2,179 +2,99 @@
 查询的执行
 ====================================
 
-Databases often consider how queries are executed an implementation detail
-hidden behind an abstraction barrier that users need not care about,
-so that databases can utilize query optimizers to choose the best query execution plan
-regardless of how the query was originally written.
-This abstraction barrier is leaky, however,
-since bad query execution plans invariably occur,
-and users need to "reach behind the curtain" to fix performance problems,
-which is a difficult and tiring task.
-The problem becomes more severe the more joins a query contains,
-and graph queries tend to contain a large number of joins.
+一般来说，数据库具体如何执行查询被认为是具体实现的细节，用户不需要了解，理由是这样数据库会有更多的有优化查询计划的空间。然而在实际应用中的情况并非如此理想化：由于在复杂查询（尤其是多表连接查询）时数据库“优化”后的计划常常造成性能上的问题，用户常常需要通过各种方式限制数据库的这种自由度来使数据库按照用户的意图来执行查询，这个过程艰辛且令人痛苦。在图数据库中这个问题尤其突出，因为图查询包含大量多表连接。
 
-So in Cozo we take the pragmatic approach and make query execution deterministic
-and easy to tell from how the query was written.
-The flip side is that we demand the user to
-know what is the best way to store their data,
-which is in general less demanding than coercing the query optimizer.
-Then, armed with knowledge of this chapter, writing efficient queries is easy.
+对此问题，Cozo 采取了实用的态度，保证执行查询时的执行计划是 **确定性的** ，即根据查询的文本本身就能断定查询如何被执行。这也意味着用户常常需要对数据本身有一定的了解，特别是需要知道应该如何写查询文本才能生成想要的查询执行计划。大家会发现，在查询文本复杂时，这种确定性，这种能够明确地操纵查询计划的能力，实际上会省去很多时间与精力。
 
 --------------------------------------
 析取范式
 --------------------------------------
 
-Evaluation starts by canonicalizing inline rules into
-`disjunction normal form <https://en.wikipedia.org/wiki/Disjunctive_normal_form>`_,
-i.e., a disjunction of conjunctions, with any negation pushed to the innermost level.
-Each clause of the outmost disjunction is then treated as a separate rule.
-The consequence is that the safety rule may be violated
-even though textually every variable in the head occurs in the body.
-As an example::
-
+查询文本编译的第一个步骤是将所有内联规则中由原子组成的逻辑表达式转化为 `析取范式 <https://baike.baidu.com/item/%E6%9E%90%E5%8F%96%E8%8C%83%E5%BC%8F/2587070>`_ ：所有的否定都直接作用于底层的原子上，然后整个逻辑短句由有限个合取式的析取组成，这些合取式则只包含底层原子或底层原子的否定式。而后顶层析取式中的每个合取短句都成为独立的同一个内联规则下的正文。需要注意的是，转化后的查询文本可能会违反安全规则，即使文本本身看起来似乎没问题，比如：
+::
     rule[a, b] := rule1[a] or rule2[b]
 
-is a violation of the safety rule since it is rewritten into two rules, each of which is missing a different binding.
+在改写后这一条正文变成了两条正文，而在这两条正文中都未全部绑定包含头部所需要的所有变量，因此此查询是不安全的。
 
 --------------------------------------
 规则的分层
 --------------------------------------
 
-The next step in the processing is *stratification*.
-It begins by making a graph of the named rules,
-with the rules themselves as nodes, 
-and a link is added between two nodes when one of the rules applies the other.
-This application is through atoms for inline rules, and input relations for fixed rules.
+下一步是将所有规则分为多个 **层次** 。首先将规则作为一个图中的节点，而当一条规则的正文中应用了其它的规则时，就画一条从这条规则到被应用规则的边。这些边中，满足以下任一条件的被标注为 **断层边** ：
 
-Next, some of the links are labelled *stratifying*:
+* 规则应用的原子处于被否定的位置；
+* 被应用的规则不是当前规则本身，且被应用的规则含有任何聚合算符；
+* 被应用的规则就是当前规则本身，被应用的规则含有聚合算符且该聚合算符不能做为半晶格算符执行；
+* 规则或被应用的规则是固定规则；
 
-* when an inline rule applies another rule through negation,
-* when an inline rule applies another inline rule that contains aggregations,
-* when an inline rule applies itself and it has non-semi-lattice,
-* when an inline rule applies another rule which is a fixed rule,
-* when a fixed rule has another rule as an input relation.
+接下来算出这个图中的 `强连通分量 <https://baike.baidu.com/item/%E5%BC%BA%E8%BF%9E%E9%80%9A%E5%88%86%E9%87%8F>`_ 。如果某一个强连通分量中含有断层边，则此查询被认为无法分层，执行报错。
 
-The strongly connected components of the graph of rules are then determined and tested,
-and if it found that some strongly connected component contains a stratifying link,
-the graph is deemed *unstratifiable*, and the execution aborts.
-Otherwise, Cozo will topologically sort the strongly connected components to
-determine the strata of the rules:
-rules within the same stratum are logically executed together,
-and no two rules within the same stratum can have a stratifying link between them.
-In this process, 
-Cozo will merge the strongly connected components into as few supernodes as possible
-while still maintaining the restriction on stratifying links.
-The resulting strata are then passed on to be processed in the next step.
+如果没有报错，则对强连通分量组成的图进行拓扑排序。排序后这些强连通分量会被进一步合并为 **层** ，这个合并满足以下条件：每层中所含有的规则间没有断层边，且每层中的规则只有到当前或之前层中规则的边，没有到之后层中规则的边。
 
-You can see the stratum number assigned to rules by using the ``::explain`` system op.
+通过这个步骤我们得到的层，在查询中会按照顺序依次执行。具体查询文本的分层可以通过 ``::explain`` 系统操作来展示。
 
 --------------------------------------
-魔法集重写
+魔法集改写
 --------------------------------------
 
-Within each stratum, the input rules are rewritten using the technique of *magic sets*.
-This rewriting ensures that the query execution does not
-waste time calculating results that are later simply discarded.
-As an example, consider::
-
+接下来，层中的规则会做为一个整体来进行 **魔法集改写** 。这个改写的目的是省去一些不必要的中间结果。例如在以下查询中
+::
     reachable[a, b] := link[a, n]
     reachable[a, b] := reachable[a, c], link[c, b]
     ?[r] := reachable['A', r]
 
-Without magic set rewrites, the whole ``reachable`` relation is generated first, 
-then most of them are thrown away, keeping only those starting from ``'A'``.
-Magic set rewriting avoids this problem.
-You can see the result of the rewriting using ``::explain``.
-The rewritten query is guaranteed to yield the same relation for ``?``,
-and will in general yield fewer intermediate rows.
+如果不进行改写就直接执行，完整的 ``reachable`` 表会被生成，而当我们返回最终结果是实际上仅用到了这个表中非常小的一部分，即 ``a == 'A'`` 的那部分。而改写后的规则则只会计算这需要的一部分，并保证输出的最终结果与改写前完全相同。改写的结果同样可以通过 ``::explain`` 查询。
 
-The rewrite currently only applies to inline rules without aggregations.
+任何带有聚合算符的规则都不会被改写。
 
 --------------------------------------
 半朴素求值
 --------------------------------------
 
-Now each stratum contains either a single fixed rule or a set of inline rules.
-The single fixed rules are executed by running their specific implementations.
-For the inline rules, each of them is assigned an output relation.
-Assuming we know how to evaluate each rule given all the relations it depends on, 
-the semi-naïve algorithm can now be applied to the rules to yield all output rows.
-
-The semi-naïve algorithm is a bottom-up evaluation strategy, meaning that it tries to deduce
-all facts from a set of given facts.
+现在每层内要么含有单个的固定规则，要么含有改写过的若干个内联规则。单个的固定规则会按照其实现算法执行，而内联规则的集，当我们已经知道如何执行每条规则的正文时，从宏观上来说，则会依照半朴素求值算法执行。朴素求值算法是一个自下而上的算法：它以所有已知的事实出发，按照所给规则推导隐含的事实。由于规则间的递归关系，这个推导过程需要执行不定的次数，直到没有新事实被推导出为止，而半朴素求值法则在朴素求值法的基础上做了一些改进，通过代数性质省去了大量的推导过程。
 
 .. NOTE::
-    By contrast, top-down strategies start with stated goals and try to find proof for the goals.
-    Bottom-up strategies have many advantages over top-down ones when the whole output of each rule
-    is needed, but may waste time generating unused facts if only some of the output is kept.
-    Magic set rewrites are introduced to eliminate precisely this weakness.
+    另一类求值法是自上而下的求值法：由需要证明的事实而不是给出的事实出发，逐步构建证明的步骤。自下而上求值法相比自上而下求值法而言具有许多优势，尤其是在一定情况下能保证算法不陷入死循环（自上而下不能）。其劣势在于自下而上法经常会生成不需要的事实，而魔法集改写的引入正好完美消除了这个劣势。
 
 ---------------------------------------
 对原子排序
 ---------------------------------------
 
-The compiler reorders the atoms in the body of the inline rules, and then
-the atoms are evaluated.
+现在我们来介绍内联规则的正文部分如何被执行。首先编译器会对原子进行重新排序，然后原子依次被执行。由于我们已经将正文都转写为了析取范式，现在每个原子只能是以下情况之一：
 
-After conversion to disjunctive normal forms,
-each atom can only be one of the following:
+* 显性归一；
+* 存储或内联表的应用；
+* 表达式；
+* 存储或内联表应用的否定。
 
-* an explicit unification,
-* applying a rule or a stored relation,
-* an expression, which should evaluate to a boolean,
-* a negation of an application.
+上面给出的前两种情况可以生成新的绑定，而后两种不行。在重新排序时，前两种情况的原子原地不动，而后两种情况的原子会被安排在其所包含所有变量都已经绑定了的尽量早的位置。在重新排序之后，前两种情况就变成了关系代数的表的连接，用来连接的列就是其包含的已绑定的变量；而后两种情况就变成了关系代数中的过滤。改写的意义在于，过滤会被尽量早地执行，使得中间结果尽量地少。
 
-The first two cases may introduce fresh bindings, whereas the last two cannot. 
-The reordering make all atoms that introduce new bindings stay where they are,
-whereas all atoms that do not introduce new bindings are moved to the earliest possible place
-where all their bindings are bound.
-All atoms that introduce bindings correspond to
-joining with a pre-existing relation followed by projections
-in relational algebra, and all atoms that do not correspond to filters. 
-By applying filters as early as possible,
-we minimize the number of rows before joining them with the next relation.
-
-When writing the body of rules, we should aim to minimize the total number of rows generated.
-A strategy that works almost in all cases is to put the most restrictive atoms which generate new bindings first.
+在编写查询文本时，首要的目的就是减少中间结果的数量。一个几乎只有好处没有坏处的策略是，在连接多个表的时候，将能过滤掉更多行的表写在前面。
 
 ---------------------------------------
 对原子求值
 ---------------------------------------
 
-We now explain how a single atom which generates new bindings is processed.
+接下来介绍能够生成新绑定的原子的求值方法。
 
-For unifications, the right-hand side, an expression with all variables bound,
-is simply evaluated, and the result is joined
-to the current relation (as in a ``map-cat`` operation in functional languages).
+在显性归一种，算符右边的表达式会被执行（此时其所含所有变量都已有绑定），然后结果会被连接到当前的表中，相当于函数式语言中的 ``map-cat`` 函数。
 
-Rules or stored relations are conceptually trees, with composite keys sorted lexicographically.
-The complexity of their applications in atoms
-is therefore determined by whether the bound variables and constants in the application bindings form a *key prefix*.
-For example, the following application::
-
+表的应用都与单个的表相关，而这些表都是以其键做字典排序来存储的树。因此，一个表的应用的算法复杂度取决于其已绑定的变量是否构成表键列的 **前缀** 。比如说，在下例中的应用
+::
     a_rule['A', 'B', c]
 
-with ``c`` unbound, is very efficient, since this corresponds to a prefix scan in the tree with the key prefix ``['A', 'B']``,
-whereas the following application::
-
+变量 ``c`` 未被绑定。这个查询中前两列已被绑定，且构成了前缀，所以系统可以直接在树上找到前缀对应的位置，因此此查询复杂度低，速度快。与此相对的，以下查询中
+::
     a_rule[a, 'B', 'C']
 
-where ``a`` is unbound, is very expensive, since we must do a full scan.
-On the other hand, if ``a`` is bound, then this is only a logarithmic-time existence check.
+如果变量 ``a`` 未绑定，则系统必须遍历所有数据才能找出满足条件的行，因此复杂度高，速度慢。
 
-For stored relations, you need to check its schema for the order of keys to deduce the complexity.
-The system op ``::explain`` may also give you some information.
+在了解存储表应用的具体执行必须先了解存储表的结构。系统操作 ``::explain`` 也可以显示一个查询中是否含有对某个表的遍历操作。
 
-Rows are generated in a streaming fashion,
-meaning that relation joins proceed as soon as one row is available,
-and do not wait until the whole relation is generated.
+对正文求值时，行是以流式的方式生成的，也就是说前一个原子生成了一行后，就立刻开始连接下一个原子，而不等前一个原子生成其所有行。
 
 ---------------------------------------
 早停法
 ---------------------------------------
 
-For the entry rule ``?``, if ``:limit`` is specified as a query option,
-a counter is used to monitor how many valid rows are already generated.
-If enough rows are generated, the query stops. 
-This only works when the entry rule is inline
-and you do not specify ``:order``.
+指定了查询选项 ``:limit`` 以后，在执行入口规则 ``?`` 时系统会启用一个计数器来记录已经生成了多少满足查询条件的行，而由于流式的正文执行，当足够的行被生成后查询就会立刻停止。这就是 **早停法** 。此法仅对没有同时指定 ``:order`` 的查询中的内联规则奏效。
