@@ -8,14 +8,17 @@
 
 Cozo 的类型检查很严格：下面的查询
 ::
+
     ?[a] := *rel[a, b], b > 0
 
 当 ``b`` 为空值时会报错，因为只能对相同类型的值做大小比较。如果你决定所有空值的比较都应该返回假，则你可以使用 ``try`` 结构来捕获异常：
 ::
+
     ?[a] := *rel[a, b], try(b > 0, false)
 
 或者你可以认为空值代表某一个具体的非空值，那么你应该这么写：
 ::
+
     ?[a] := *rel[a, b], (b ~ -1) > 0
 
 这里的 ``~`` 是“聚凝”算符。括号其实不是必须的，但是可以让这个查询更易读一些。可能的话，建议使用聚凝算符而不是 ``try`` 结构。
@@ -33,10 +36,12 @@ Cozo 的类型检查很严格：下面的查询
 
 假设我们有如下存储表：
 ::
+
     :create friend {fr, to}
 
 我们想知道 Alice 的朋友的朋友的朋友的朋友的朋友们都是谁。我们可以这么写：
 ::
+
     ?[who] := *friends{fr: 'Alice', to: f1},
               *friends{fr: f1, to: f2},
               *friends{fr: f2, to: f3},
@@ -45,6 +50,7 @@ Cozo 的类型检查很严格：下面的查询
 
 也可以这么写：
 ::
+
     f1[who] := *friends{fr: 'Alice', to: who}
     f2[who] := f1[fr], *friends{fr, to: who}
     f3[who] := f2[fr], *friends{fr, to: who}
@@ -55,6 +61,7 @@ Cozo 的类型检查很严格：下面的查询
 
 因此，我们在写查询语句的时候，应该尽量将查询分为多个小规则。这不但让查询更易读，也会让查询运行得更快（这一点和其他一些数据库正好相反）。当然，上面的例子其实用递归查询更好：
 ::
+
     f_n[who, min(layer)] := *friends{fr: 'Alice', to: who}, layer = 1
     f_n[who, min(layer)] := f_n[fr, last_layer], *friends{fr, to: who}, layer = last_layer + 1, layer <= 5
     ?[who] := f_n[who, 5]
@@ -63,6 +70,7 @@ Cozo 的类型检查很严格：下面的查询
 
 第一种写法也有其作用，比如：
 ::
+
     ?[who] := *friends{fr: 'Alice', to: f1},
               *friends{fr: f1, to: f2},
               *friends{fr: f2, to: f3},
@@ -74,6 +82,7 @@ Cozo 的类型检查很严格：下面的查询
 
 另外，在聚合数据时：
 ::
+
     ?[count(who)] := *friends{fr: 'Alice', to: f1},
                      *friends{fr: f1, to: f2},
                      *friends{fr: f2, to: f3},

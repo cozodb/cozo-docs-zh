@@ -33,7 +33,6 @@ Cozo 数据库文档
    release
 
 .. sidebar-links::
-	:caption: 链接
    :github:
 
 	Gitee <https://gitee.com/cozodb/cozo>
