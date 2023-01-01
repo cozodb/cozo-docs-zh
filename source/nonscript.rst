@@ -2,80 +2,60 @@
 CozoScript 之外
 ======================================
 
-Most functionalities of the Cozo database are accessible via the CozoScript API.
-However, other functionalities either cannot conform to the "always return a relation" constraint,
-or are of such a nature as to make a separate API desirable. These are described here.
+Cozo 数据库中的大多数功能都皆由 CozoScript API 使用。但由于 CozoScript API 必须返回固定的格式，一些功能并不适合这种表达方式。还有另一些功能虽然可以如此表达，但是其作用与一般的查询关系不大。这些功能都必须经由单独的 API 访问。
 
-The calling convention and even names of the APIs may differ on different target languages, please refer
-to the respective language-specific documentation. Here we use the Python API as an example
-to describe what they do.
+在不同的语言环境中，调用这些 API 的方式略有差异，具体请参考每个语言实现自己的文档。以下我们简述每个 API 的基本作用（下例中使用的是 Python API 的格式）。
 
 .. module:: API
     :noindex:
 
 .. function:: export_relations(self, relations)
 
-    Export the specified ``relations``. It is guaranteed that the exported data form a consistent snapshot of 
-    what was stored in the database.
+    导出一个或多个存储表。数据统一性：一次性所有导出的表都仅含有同一快照中的数据。
 
-    :param relations: names of the relations in a list.
-    :return: a dict with string keys for the names of relations, and values containing all the rows.
+    :param relations: 含有需要导出的表的名称的数组。
+    :return: 一个字典，键为表名，值为表中所有数据。
 
 .. function:: import_relations(self, data)
     
-    Import data into a database. The data are imported inside a transaction, so that either all imports are successful, or none are.
-    If conflicts arise because of concurrent modification to the database, via either CosoScript queries or other imports,
-    the transaction will fail.
+    导入数据。导入在一个事务中执行，所以要么所有的导入数据都成功写入，要么任何数据都不被写入。若导入时其他进程（导入或查询）造成了被导入的数据冲突，则报错，导入失败。
 
-    The relations to import into must exist beforehand, and the data given must match the schema defined.
+    导入的存储表必须已经存在于数据库中，且导入的数据必须满足存储表声明的列结构。
 
-    This API can be used to batch-put or remove data from several stored relations atomically.
-    The ``data`` parameter can contain relation names such as ``"rel_a"``, or relation names prefixed by a minus sign such as ``"-rel_a"``.
-    For the former case, every row given for the relation will be ``put`` into the database, i.e. upsert semantics.
-    For the latter case, the corresponding rows are removed from the database, and you should only specify the key part of the rows.
-    As for ``rm`` in CozoScript, it is not an error to remove non-existent rows.
+    这个 API 不但可以用来插入数据，也可以用来删除数据。删除数据时，在存储表的前面加负号，比如删除 ``"rel_a"`` 中的数据，则使用 ``"-rel_a"`` 作为表名。插入数据时不管当前表中有无当前键，都不报错，而执行覆盖。删除数据时，即使当前表中不含当前键，也不报错。删除数据时只需要给出键，不需要值。
 
     .. WARNING::
-        Triggers are not run for direct imports.
+        此 API 不会激活触发器。
 
-    :param data: should be given as a dict with string keys, in the same format as returned by ``export_relations``.
-                 For example: ``{"rel_a": {"headers": ["x", "y"], "rows": [[1, 2], [3, 4]]}, "rel_b": {"headers": ["z"], "rows": []}}``
+    :param data: 一个字典，键为表名，值与 ``export_relations`` 返回的表内容相同，例如： ``{"rel_a": {"headers": ["x", "y"], "rows": [[1, 2], [3, 4]]}, "rel_b": {"headers": ["z"], "rows": []}}`` 。
 
 
 .. function:: backup(self, path)
 
-    Backup a database to the specified path. 
-    The exported data is guaranteed to form a consistent snapshot of what was stored in the database.
+    备份数据库至指定路径。备份的数据保证是满足一致性的数据快照。
 
-    This backs up everything: you cannot choose what to back up. It is also much more efficient than exporting all stored
-    relations via ``export_relations``, and only a tiny fraction of the total data needs to reside in memory during
-    backup.
+    这个 API 对所有数据进行备份：你无法选择性的备份指定的表。另外，这个 API 比 ``export_relations`` 效率高，同时用的资源也更少。
 
-    This function is only available if the ``storage-sqlite`` feature flag was on when compiling.
-    The flag is on for all pre-built binaries except the WASM binaries.
-    The backup produced by this API can then be used as an independent SQLite-based Cozo database.
-    If you want to store the backup for future use, you should compress it to save a lot of disk space.
+    此 API 仅在编译时打开了 ``storage-sqlite`` 功能的情况下才可用。除了浏览器 WASM 之外的所有预编译发布都打开了此功能。备份文件实际上就是一个完整的 SQLite 存储引擎的文件，因此可以直接打开查询。若要长期储存，建议将此文件压缩。
 
-    :param path: the path to write the backup into. For a remote database, this is a path on the remote machine.
+    :param path: 备份路径。若远程操作数据库，则此为远程机器上的路径。
 
 .. function:: restore(self, path)
 
-    Restore the database from a backup. Must be called on an empty database. 
-    
-    This restores everything: you cannot choose what to restore.
+    从备份中恢复数据至当前空数据库。
 
-    :param path: the path to the backup. You cannot restore remote databases this way: use the executable directly.
+    此 API 恢复所有数据：你无法选择性的只恢复指定的表。
+
+    :param path: 备份路径。远程操作数据库时此 API 无法使用。
 
 .. function:: import_from_backup(self, path, relations)
     
-    Import stored relations from a backup.
+    从备份中抽取表中数据并写入当前数据库中的同名表。
 
-    In terms of semantics, this is like ``import_relations``, except that data comes from the backup file directly,
-    and you can only ``put``, not ``rm``. It is also more memory-efficient than ``import_relations``.
+    从语义上来说，此 API 与 ``import_relations`` 类似，不同点在于数据来源于备份而不是直接传入，且此 API 无法删除数据。另外此 API 占用资源也比 ``import_relations`` 小。
 
     .. WARNING::
-        Triggers are not run for direct imports.
+        此 API 不会激活任何触发器。
 
-    :param path: path to the backup file. For remote databases, this is a path on the remote machine.
-    :param relations: a list containing the names of the relations to import. The relations must exist
-                        in the database.
+    :param path: 备份路径。若远程操作数据库，则此为远程机器上的路径。
+    :param relations: 存储表名称组成的数组。这些存储表必须预先存在于当前数据库中。
