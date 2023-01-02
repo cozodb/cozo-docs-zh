@@ -1,67 +1,24 @@
 Cozo 哪儿都能跑
 ==============================
 
-Version 0.1 of Cozo can be used embedded from Python, NodeJS, Java, Rust
-and C, in addition to running standalone as a web server. Immediately
-after its release, many people asked about the feasibility of using Cozo
-embedded on mobile devices.
+当我们发布 Cozo 的 0.1 版本时，Cozo 已经可以在 Python、 NodeJS、Java、Rust 以及 C 语言中嵌入式地运行，也可以作为一个独立的服务运行。发布之后，很多人询问 Cozo 是否能在移动设备上运行。
 
-There was one major obstacle to supporting mobile: Cozo 0.1 used RockDB
-as the storage engine, and compiling RocksDB for mobile devices is not
-an easy task. We chose RocksDB because it could handle a huge amount of
-concurrency and is very fast, but the concurrency part may not be
-relevant for the mobile case: you almost always have only one process
-concurrently accessing the database.
+Cozo 的 0.1 版本使用 RocksDB 作为存储引擎，而这成了在移动设备上运行的阻碍：在多个移动平台上编译 RocksDB 依赖并不是那么简单的事情。我们一开始选择 RocksDB，是因为看中了它的高性能和高并发支持，但是在移动设备上这两点都没那么重要，尤其是并发：基本上数据库同时只有一个用户访问使用。
 
-So we ripped apart the storage engine code, made a nice and minimal
-interface out of it, and now Cozo supports swappable storage engines! At
-the time of this writing, you can choose from the following:
+所以，为了支持移动端，我们将代码中所有关于存储引擎的部分抽象成了一个接口，然后面对这个接口又写了几个其它的存储引擎实现。所以现在，Cozo 支持以下不同的引擎：
 
--  In-memory engine
--  SQLite engine
--  RocksDB engine
--  Sled engine
--  TiKV engine
+- 基于内存的非持久性存储引擎
+- 基于 SQLite 的存储引擎
+- 基于 RocksDB 的存储引擎
+- 基于 Sled 的存储引擎
+- 基于 TiKV 的分布式存储引擎
 
-They offer different trade-offs:
+这些引擎各有优劣：
 
--  The in-memory engine is perfect if you just want to use Cozo as a
-   computation engine. For us, it also made writing tests much easier.
-   The downside is that it doesn’t persist data, and it doesn’t support
-   much *write* concurrency.
--  The SQLite engine uses a minimal amount of resources, is easy to
-   compile for almost all platforms including mobile, and is reasonably
-   fast for reads. SQLite markets itself as a *file storage format*, and
-   we took advantage of that by making SQLite the backup format for all
-   engines. In this way when you backup your database, you get a
-   single-file SQLite-backed Cozo database. You do not need to restore
-   the backup to look inside: the backup *is* a fully functional
-   database. As a backup format, it is also extremely space-efficient
-   after you gzip it. The downside is as expected: SQLite is not very
-   fast when it comes to writing and is effectively single-threaded when
-   write concurrency is involved. But as we have said, these are usually
-   not problems on mobile.
--  The RocksDB engine is crazy fast for both reads and writes and can
-   handle an enormous amount of concurrency, while still being rather
-   conservative on resource usage. In particular, its storage on disk is
-   compressed, making its disk space requirements for live databases the
-   smallest among all persistent options.
--  We included Sled as an engine just because we can. The only benefit
-   is that it is pure Rust, and we are not Rust fundamentalists. It is
-   not faster than SQLite for the usual workload that Cozo encounters
-   and uses way more disk space.
--  The TiKV option is the slowest among all options (10x to 100x slower)
-   since data must come from the network. The benefit is that TiKV is a
-   distributed storage. We included it so that people may decide for
-   themselves if it offers value for them. By the way, 100x slower *than
-   the other storage options* may not be slow compared to the average
-   graph databases in the market – see the next section.
+-  如果你只是想将 Cozo 作为一个计算平台应用，那纯内存的引擎非常合适。由于其设置简单，启动快，也非常适合用来写测试。其劣势也很明显：不对数据做任何持久化，且在并发方面只支持读，所有写操作实际上是线性单线程的。
+-  SQLite 存储引擎占用资源极小，在各种平台上的编译非常简单，其读取数据的速度也相当快。SQLite 的另一个优势是其定义了一个稳定的单文件存储格式，所以我们在 Cozo 中直接也将这个格式用为了所有引擎的备份格式。这意味着所有数据库备份都是直接可用的数据库，从备份中读取数据不需要经过恢复备份的过程。如果将 SQLite 文件进行压缩，得到的文件大小是与数据源文件的压缩一个数量级的，因此也适合长期保存。其劣势在于其写入速度并不理想，尤其是并发环境下的写入速度相当慢。但这在移动端上一般不是问题。
+-  RocksDB 存储引擎不论读写都飞快，且可以支持相当高的并发，同时耗费的资源也很合理。另外 RocksDB 的存储本身就自带压缩，因此作为线上数据库，其占用的存储资源最小。劣势我们已经说过了，在移动端和其它的一些较为小众的平台上不太好编译。
+-  写 Sled 的存储引擎基本上是练手。如果非要说这个引擎的好处的话，那就是它是纯 Rust 实现的，编译起来简单，但这点对于除了 Rust 原教旨主义者之外并没有多大吸引力。尤其是 Sled 在各方面的性能并不比 SQLite 优秀，而占用存储空间还比它大。
+-  TiKV 存储引擎是一个分布式引擎，所有读写操作都要通过网络交换数据，所以是所有引擎中最慢的（比最快的慢 10 到 100 倍左右）。其优势也就是“分布式存储”这一点了，需要的用户可以自己尝试。当然，比最快的存储慢 10 到 100 倍，听起来很差，但实际上和市面上的某些图数据库比起来也没那么糟糕。
 
-As a result of the storage engine refactoring, Cozo now runs on a much
-wider range of platforms, including iOS, Android, and web browsers (with
-web assembly)! We have also expanded the officially supported languages
-where you can use Cozo embedded: Swift and Golang. Even if your
-platform/language combination is not supported, you can still use Cozo
-with the client/server mode. Or you can try to compile Cozo from source
-and interface it with your platform/language: let us know if you
-encounter problems, and we will help!
+存储引擎的抽象，使得 Cozo 现在可以运行在更多不同的平台与设备上，尤其是 iOS、安卓、浏览器（WASM）平台。我们也借此机会让 Cozo 可以在更多编程语言中直接嵌入式地使用：新加入了对 Swift 和 Go 语言的支持。另外，即使你最爱的语言现在没有官方的嵌入式支持，你也可以通过服务器-客户端的形式来调用 Cozo，而如果你想吃螃蟹的话，给你的语言写一个 Cozo 的原生适配其实也不难（如果遇到了苦难，欢迎联系我们，我们会尽可能地提供帮助）。
