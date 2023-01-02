@@ -1,74 +1,32 @@
 性能那些事儿
 ============================
 
-Commercial databases like to do publicity stunts by publishing
-“performance comparisons” of competing databases, with the results
-invariably favouring their products. We are not going to do that
-because, first, we do not want to attract the wrong kind of attention;
-second and more importantly, such benchmarks don’t educate users beyond
-the “trust us, we are the best” preaching. Instead, we want our
-benchmarks to help the users answer the following questions:
+商业化的数据库喜欢通过性能测试搞大新闻，动不动就是比竞争对手快多少多少倍，当然竞争对手也有类似的性能测试。我们不干这事。第一，我们作为一个开源软件，这种空洞的新闻意义不大；第二，这种新闻除了“信我，用我”式的传教之外，并不能给用户带来什么真正的好处。我们希望，我们的性能测试对用户而言有一定的实用性，能让用户自己回答以下问题：
 
--  For my particular workload, what are the pros and cons of the
-   different setups that I can choose from?
--  What is the performance I can expect from such a setup and is it
-   enough for me?
+-  在我的应用场景中，使用 Cozo 时都有哪些选择？这些选择的优劣都是什么？
+-  用我手上现有的机器跑我需要的查询，大概能达到什么样的性能？
 
 准备工作
 ---------
 
-We will only be comparing Cozo to itself running on two different
-machines:
+我们所有的性能测试，都是拿不同设置的 Cozo 互相比较。我们用来跑测试的机器有下面这两台：
 
--  Mac Mini (2020)
--  Linux Server (2017)
+-  一台 Mac Mini（2020 年产）
+-  一台 Linux 服务器（2017 年产）
 
-The Mac Mini runs MacOS 13.0.1, has Apple M1 CPUs with 4 performance
-cores and 4 efficiency cores, 16GB of memory and a pretty fast NVMe SSD
-storage. Its benchmarks would be typical of recent reasonably powerful
-desktop and laptop machines. The Linux server runs Ubuntu 22.04.1 LTS,
-has two Intel Xeon E5-2678v3 CPUs with a total of 24 physical cores,
-64GB of memory and one of the slowest SSD storage I have ever seen. You
-can expect similar performance if you (over)pay cloud providers. If you
-have servers that have newer hardware, you can probably expect much
-better performance.
+Mac Mini 的操作系统为 MacOS 13.0.1，使用苹果 M1 处理器，4 个性能核，四个功效核，16GB 内存，存储是一个挺快的 NVMe SSD。它所代表的性能是不太旧的台式机、笔记本的性能。Linux 服务器的操作系统为 Ubuntu 22.04.1 LTS，使用量块 Intel Xeon E5-2678v3 处理器，共 24 个物理核，64GB 内存，存储是我们见过最慢的 SSD。如果你的服务器比较旧，或者你租用了云服务商溢价的高端云主机，那么性能应该和这台机器有类似之处。自己精心配制的新的服务器应该比我们这台快得多。
 
-We will be running Cozo `embedded in
-Rust <https://github.com/cozodb/cozo/blob/dev/cozo-core/benches/pokec.rs>`__
-(in fact, we will take advantage of Rust’s built-in benchmark tools). As
-it is embedded, we will use different numbers of concurrent threads to
-run Cozo to see how a particular task scales with the number of
-processors. Embedding Cozo in Rust is the fastest way to run Cozo and if
-your use case involves embedding in another language such as Python,
-there will be overheads due to Python itself. Still, if for similar
-tasks as recorded here you experience orders of magnitude worse
-performance, please let us know since it could be an environment-related
-bug.
+测试时我们嵌入式地通过 Rust 来调用 Cozo（我们直接用了 Rust 内置的性能测试框架）。由于是嵌入式地使用，我们通过调整分配给查询任务的线程数来测试某项工作的性能与所用处理器数量之间的关系。当然，使用 Rust 嵌入式地调用 Cozo 意味着测试时几乎没有什么额外性能损耗：如果通过 Python 等来调用，则额外性能开销还是比较明显的。尽管如此，在差不多的硬件条件下，不管什么语言环境中的性能都应该是同一个数量级的，否则就应该是 bug，如果发现了请告诉我们。
 
-It seems graph databases like to use the `Slovenian social network
-Pokec <https://snap.stanford.edu/data/soc-pokec.html>`__ for benchmarks
-(see
-`here <https://github.com/memgraph/memgraph/tree/master/tests/mgbench#books-datasets>`__
-and
-`here <https://www.arangodb.com/2018/02/nosql-performance-benchmark-2018-mongodb-postgresql-orientdb-neo4j-arangodb/>`__).
-We will use three different sizes for subsets of the data:
+众多图数据库都喜欢用 `斯洛文尼亚 Pokec 社交网络 <https://snap.stanford.edu/data/soc-pokec.html>`__ 的数据来做性能测试（比如 `这个 <https://github.com/memgraph/memgraph/tree/master/tests/mgbench#books-datasets>`__ ，还有 `这个 <https://www.arangodb.com/2018/02/nosql-performance-benchmark-2018-mongodb-postgresql-orientdb-neo4j-arangodb/>`__ ）。我们会用这个数据集的几个不同的子集来测试：
 
--  “Tiny”: 10,000 vertices, 121,716 edges
--  “Small”: 100,000 vertices, 1,768,515 edges
--  “Medium”: 1,632,803 vertices, 30,622,564 edges, this is the full
-   dataset
+-  “微型集”：1 万个顶点，12 多万条边；
+-  “小型集”： 10 万个顶点，176 多万条边；
+-  “中型集”：163 多万个顶点，3062 多万条边（这是数据的全集）。
 
-Note that this is the same subsets as done
-`here <https://github.com/memgraph/memgraph/tree/master/tests/mgbench#pokec>`__,
-except their “small” is our “tiny”, their “medium” is our “small”, and
-their “large” is our “medium”. We feel it to be rather presumptuous in
-this age to call a dataset with just over 30 million edges “large”. When
-will we do a benchmark for a truly `webscale
-dataset <https://www.tigergraph.com/benchmark/>`__? When we have more
-time and a deeper pocket, maybe! Anyway, the “medium” size is probably
-large enough for most purposes.
+数据的分割与 `这个测试 <https://github.com/memgraph/memgraph/tree/master/tests/mgbench#pokec>`__ 里面的实际上是一样的，但是他们的“小型集”在我们这里叫“微型集”，他们的“中型集”在我们这里叫做“小型集”，他们的“大型集”在我们这里叫做“中型集”。我们这么命名的原因是，“大数据时代”喊了这么多年了，将一个区区 3000 多万条边的数据集叫做“大数据集”，实在是有些自欺欺人。当然我们也希望能在真正的 `大数据集 <https://www.tigergraph.com/benchmark/>`__ 上测试：不过先等我们钱包更鼓点吧。对于一般的应用来说，我嫩测试的“中型集”也不算小了。
 
-The schema for the data is the following, written in CozoScript:
+数据库的结构由下列 CozoScript 建立：
 
 ::
 
@@ -76,41 +34,21 @@ The schema for the data is the following, written in CozoScript:
    {:create friends {fr: Int, to: Int}}
    {:create friends.rev {to: Int, fr: Int}}
 
-If you don’t read CozoScript yet: the relation ``user`` has an integer
-primary key and three non-keys representing the vertices, the relation
-``friends`` has a composite ``(Int, Int)`` primary key representing the
-edges, and the relation ``friends.rev`` acts as an index for the edges
-in the reverse direction (in Cozo, everything is very explicit).
+如果你还不太了解 CozoScript 的语法：第一个表名为 ``user`` ，主键是个整数，除了主键之外还有三列；第二个表名为 ``friends`` ，有两个整数列组成的组合主键，数据表示人之间的关系；第三个表为 ``friends.rev`` ，存储内容与第二个表相同，但是列的顺序相反，可以作为反向索引使用（Cozo 对索引的使用都是显性的，详见文档）。
 
-We will be comparing Cozo running with three different storage engines
-as introduced in the first section:
+我们会测试以下三种不同的存储引擎：
 
--  In-memory engine
--  SQLite engine
--  RocksDB engine
+- 基于内存（Mem）的非持久性存储引擎
+- 基于 SQLite 的存储引擎
+- 基于 RocksDB 的存储引擎
 
-All queries are run with snapshot isolations in effect: when mixing
-reads and writes, reads will only see a snapshot of data valid at the
-start of the transaction, and when writes conflict with each other, at
-least one of them will fail to commit, in which case we will manually
-retry the query. This is the only consistency level Cozo currently
-supports: there is no way to opt for a more lax consistency model.
+Cozo 中的所有查询都满足快照隔离：即当并发读写时，所有的读写操作都只能读取当前事务开始之前已经写入的数据，加上当前事务中自己写入的数据，且如果两个写操作对相同的行做出了修改，则至少有一个操作会失败，这个操作不会有任何修改被写入数据库。在测试时如果遇到这种失败，我们会重试至成功为止。目前 Cozo 只支持这一种一致性：没有办法放松一致性来进一步提高性能。
 
-All mutations sent to the backend engine complete only when the
-underlying storage engine transactions complete: there is no “fire and
-forget” involved to give the user a false impression of high
-performance.
+在测试中，所有的写操作只有在数据持久化之后才会返回：我们不搞“打一枪就跑，存没存进去不知道”的小动作来抬高性能。
 
-Finally, note that we only benchmark the out-of-box experience of Cozo.
-In the case of the RocksDB engine, there are lots of knobs you can turn
-to make it much more performant for certain workloads (the easiest knob
-is to beg it to use more memory, which helps when dealing with large
-datasets), but we expect most users *not* to be experts in such
-optimizations.
+我们只测试 Cozo 的“开箱即用”配置。实际上，可以通过配置 RocksDB 存储引擎来进一步优化性能，但是这种优化过于复杂，对于一般的用户来说意义也有限。
 
-You can download the complete result of the benchmarks as a spreadsheet
-:download:`here <files/cozo_perf.xlsx>`
-to do your own analysis.
+完整的测试结果在 :download:`这个表里 <files/cozo_perf.xlsx>` ，你可以下载下来自己分析。
 
 数据载入
 ------------
@@ -118,345 +56,225 @@ to do your own analysis.
 批量载入
 ~~~~~~~~~~~~
 
-The first question we are interested in is how long it takes to load our
-datasets into the database: do we need to wait for days? Our approach is
-to parse data from a text file and insert them into the database in
-batches of 300, single-threaded.
+第一个测试是：完全导入数据需要花多久（要不要等上好几天）。在这个测试中，我们从文本文件中读取原数据，再以 300 行一组，单线程分批插入数据。
 
-For the tiny dataset, the results are:
+在微型集上，结果如下：
 
-======== ======= ====================
-Platform Backend Time taken (seconds)
-======== ======= ====================
-Mac Mini Mem     0.265788
-Mac Mini RocksDB 0.686022
-Mac Mini SQLite  6.383260
-Server   Mem     0.494136
-Server   RocksDB 1.285214
-Server   SQLite  27.971535
-======== ======= ====================
+========  ======= ====================
+平台      引擎    耗时（秒）
+========  ======= ====================
+Mac Mini  Mem     0.265788
+Mac Mini  RocksDB 0.686022
+Mac Mini  SQLite  6.383260
+服务器    Mem     0.494136
+服务器    RocksDB 1.285214
+服务器    SQLite  27.971535
+========  ======= ====================
 
-Here is for the small dataset:
+在小型集上，结果如下：
 
-======== ======= ====================
-Platform Backend Time taken (seconds)
-======== ======= ====================
-Mac Mini Mem     5.429186
-Mac Mini RocksDB 11.752198
-Mac Mini SQLite  146.848621
-Server   Mem     8.741262
-Server   RocksDB 19.261249
-Server   SQLite  432.705856
-======== ======= ====================
+========  ======= ====================
+平台      引擎    耗时 (秒)
+========  ======= ====================
+Mac Mini  Mem     5.429186
+Mac Mini  RocksDB 11.752198
+Mac Mini  SQLite  146.848621
+服务器    Mem     8.741262
+服务器    RocksDB 19.261249
+服务器    SQLite  432.705856
+========  ======= ====================
 
-And for the large dataset:
+在中型集上，结果如下：
 
-======== ======= ====================
-Platform Backend Time taken (seconds)
-======== ======= ====================
-Mac Mini Mem     155.894422
-Mac Mini RocksDB 212.731813
-Server   Mem     219.956052
-Server   RocksDB 348.638331
-======== ======= ====================
+========  ======= ====================
+平台      引擎    耗时 (秒)
+========  ======= ====================
+Mac Mini  Mem     155.894422
+Mac Mini  RocksDB 212.731813
+服务器    Mem     219.956052
+服务器    RocksDB 348.638331
+========  ======= ====================
 
-As you can see we didn’t even test for SQLite’s performance using the
-medium dataset, as we grew tired of waiting. If the trend continues,
-import with SQLite backend would take at least 45 minutes on Mac Mini,
-and more than 2 hours on the Linux server. SQLite’s performance looks
-really bad here, but we used to import a similar amount of data into
-another graph database and it took us *half a day*. And even if you
-insist on using the SQLite backend, there is a much faster way to import
-data: keep reading.
+因为我们很没耐心，所以我们根本没测 SQLite 引擎在中型集上需要多久。根据上面所现的规律，我们可以给出一个大概的估计：用 SQLite 引擎导入中型集，如果用的是 Mac Mini，则大概要 45 分钟，如果是服务器则要两个多小时。这让 SQLite 看起来很差，但是实际上是其他两个引擎表现太好了：我们之前在往其它某个图数据中导入相同数据的时候用了半天的时间，即使我们再不会用，这速度也太离谱了。
 
-For the RocksDB backend, everything can be done within a few minutes,
-which is more than reasonable for tens of millions of rows.
+实际上如果你非要使用 SQLite 引擎，也有导入数据快得多的方法，后面会介绍。
 
-We can compare performance across the board by considering *raw rows per
-second* in imports, in which an edge counts as two raw rows since it
-must appear in two relations:
+如果用的是 RocksDB 引擎，则几分钟之内几千万行的数据就被搞定了。我们觉得这挺快了。
+
+我们可以在数据集之间纵向比较性能：不再看总耗时，而看每秒能导入多少行。注意每个边算作两行，因为我们需要往两个表中插入同一条边：
 
 .. figure:: files/batch_import_rps.svg
    :alt: Batch import
 
-   Batch import
+我们可以看出 RocksDB 的性能表现非常好，尤其是在数据集变大时：大数据集对于单位时间内处理行数的影响很小，且比起完全不往硬盘上写内容的 Mem 引擎来，也只慢了三倍左右。
 
-Here RocksDB performs well, especially for scaling: the decrease in raw
-rows per second due to larger datasets is very small. And it is always
-within a factor of three for the mem backend which does not persist data
-at all.
+有些人可能会说，这么测对 SQLite 引擎不公平，因为如果允许调参数、改变插入方式的话，SQLite 的数值不会这么低。但是我们的原则就是测试“开箱即用”的性能，而且 RocksDB `参数 <https://github.com/cozodb/cozo#tuning-the-rocksdb-backend-for-cozo>`__ 的种类更多，性能上升空间更大。
 
-Some of you may say that this is not fair for the SQLite backend, since
-with some additional tricks and more clever batching, you can get higher
-numbers for SQLite. Well, we are testing for simple-minded out-of-box
-performance, and the fact is that with
-`tuning <https://github.com/cozodb/cozo#tuning-the-rocksdb-backend-for-cozo>`__,
-the RocksDB performance can be increased even more drastically.
-
-How much memory does the database use during the import process? We will
-show the peak memory usage as reported by the system:
+在整个导入过程中，占用了多少系统内存呢？以下我们给出操作系统记录的进程的峰值内存使用量：
 
 .. figure:: files/batch_import_mem.svg
    :alt: Batch import mem
 
-   Batch import mem
+实际上数据库本身用的内存比图中显示的还少：测试框架本身就会占用大概 50MB 内存，即使什么也不干。所以实际上 SQLite 引擎使用的内存接近于 0，而 RocksDB 则确实用了一些内存作为缓存。图中没有 SQLite 对于中数据集的数据，原因之前已经说过，等太久，没耐心了。
 
-The benchmark infrastructure takes about 50MB of memory even if it does
-nothing. So the SQLite backend always uses a negligible amount of extra
-memory. RocksDB on the other hand will use memory to speed things up. As
-we have said before we didn’t collect data for importing the medium
-dataset into the SQLite backend.
-
-The data for the mem backend is shown below separately:
+纯内存存储引擎的内存峰值如下：
 
 .. figure:: files/batch_import_mem_mem.svg
    :alt: Batch import mem for mem
 
-   Batch import mem for mem
-
-This measures the size of the whole dataset as the mem backend can only
-store data in memory. As we can see Apple’s OS somehow uses memory more
-efficiently. For almost everything we do in this benchmark, the memory
-usage of the mem backend is very similar to this, so we will not show
-the memory usage of the mem backend before. If you are interested
-nonetheless, you can look at the raw data in the
-:download:`spreadsheet <files/cozo_perf.xlsx>`.
+我们将这个结果单独列出来，因为实际上这就是整个数据集在内存中大概的大小。我们可以看出苹果平台在内存使用上似乎更节省一些。在下面的测试中，当我们展示内存相关的结果时，我们不会展示纯内存引擎相关的数据，因为纯内存引擎的内存使用基本完全取决于存了多少数据，也就是说数据都和这张图差不多。如果你想看更详细的数据， :download:`文件 <files/cozo_perf.xlsx>` 里面有。
 
 备份
 ~~~~~~
 
-In Cozo we can backup the database to an SQLite-based database. How fast
-is the backup?
+Cozo 的备份文件就是一个 SQLite 的引擎文件。生成速度如何呢？
 
 .. figure:: files/backup_rps.svg
    :alt: Backup
 
-   Backup
+在 Mac Mini 上，不管什么引擎都可以达到每秒一百万行以上的性能，对于大多数应用来说这大概足够快了。而在服务器上，由于其 SSD 实在比较糟糕，所以性能与 Mac Mini 差距较大，但是速度也是可接受的。
 
-On a Mac Mini, this is around one million raw rows per second for all
-backends, which should be fast enough for most purposes. On the Linux
-server, the bad quality of the SSD shows, but it is still quite fast. By
-the way, if you have lots of data and you want to use the SQLite
-backend, you can batch import the data into the RocksDB or mem backend,
-and then back up the database. The backup file *is* a working
-SQLite-backed database, and the whole process is *a lot* faster than
-importing into an SQLite-backed database directly.
+之前我们说过向 SQLite 导入数据有更快的方法，现在你知道了：现导入其他的引擎，再导出成备份，而备份文件本身就可以被 SQLite 引擎直接使用。
 
-Memory usage:
+内存峰值：
 
 .. figure:: files/backup_mem.svg
    :alt: Backup memory
 
-   Backup memory
-
-Not much surprise here. As we said before around 50MB is used by the
-benchmark infrastructure, so take that into account.
+没惊也没喜。我们之前说过，测试框架大概就会用 50MB 内存，所以应该把大概这个数除去。
 
 从备份恢复
 ~~~~~~~~~~~~~~~~~~~~~
 
-How fast is restoring from a backup?
+从备份恢复，大概速度如何呢？
 
 .. figure:: files/restore_rps.svg
    :alt: Restore
 
-   Restore
+在所有的测试中，这是唯一一个 RocksDB 比其它两个引擎慢的测试，大概只能达到每秒 40 万行。恢复到 SQLite 很快，但是实际上可以更快：我们前面已经说过了，直接把文件拷贝一份就好（或者如果你不打算写入数据的话，连拷贝都不用，直接用）。
 
-This is the only benchmark where RocksDB performs the worst, with 400K
-raw rows per second. Restoring into the SQLite backend is fast, but in
-fact, you can be faster still: just copy the backup file over (or use it
-directly if you don’t intend to write any data)!
-
-Memory usage:
+内存峰值：
 
 .. figure:: files/restore_mem.svg
    :alt: Restore memory
 
-   Restore memory
-
-No surprise.
+如所料。
 
 事务性查询（OLTP）
 ----------------------------
 
-Online Transaction Processing (OLTP) queries are simple reads or writes
-queries that are expected to finish quickly, and you are expected to
-deal with lots of them.
+事务性查询（OLTP）指的是对数据简单的读或写，影响的行数小，单个查询返回速度快。
 
 单点读
 ~~~~~~~~~~
 
-This is the simplest kind of query you can imagine: given an ID, it just
-reads the corresponding row and gives it to you:
+我们来测试能想到的最简单的查询：给出一个随机的 ID，返回整条数据：
 
 ::
 
    ?[cmpl_pct, gender, age] := *user{uid: $id, cmpl_pct, gender, age}
 
-The performance metric we are interested in is the queries per second
-(QPS):
+我们用来反映性能的指标是每秒执行次数（QPS）：
 
 .. figure:: files/single_vertex_read_qps.svg
    :alt: Single vertex read QPS
 
-   Single vertex read QPS
+我们可以看出，对于单点查询来说，数据集本身多大对性能影响不大，而线程数量与性能的相关基本是线性的，直到用完处理器所有的性能核为止（这里 Mac Mini 才分性能核与功效核，而其功效核在这里可以看出基本没什么用，甚至有反作用）。基本来说，在充分利用资源的情况下，每秒 10 万次查询对什么机器问题都不大。
 
-The effect of data size on such queries is small, and in general, adding
-more cores helps almost *linearly*, though in the case of Mac Mini, only
-the performance cores help, the efficient cores are pretty useless and
-can get in the way. In general, you can expect at least around 100K QPS
-regardless of data size on all setups when you fully utilize your
-resources.
-
-For memory usage:
+峰值内存：
 
 .. figure:: files/single_vertex_read_mem.svg
    :alt: Single vertex read mem
 
    Single vertex read mem
 
-RocksDB only starts using memory with the medium dataset. In all other
-cases, memory usage is minimal.
+只有到了中型集的时候，RocksDB 才开始积极使用内存，其他情况下都是能省则省。
 
 单点写
 ~~~~~~~~~~~
 
-This is the simplest write query: it just creates a new vertex:
+最简单的写操作，写入一个新的端点：
 
 ::
 
    ?[uid, cmpl_pct, gender, age] <- [[$id, 0, null, null]] :put user {uid => cmpl_pct, gender, age}
 
-For this query, we are only going to show multi-thread performances for
-RocksDB, since writing to the other backends are protected by a big
-lock, so they are effectively still single-threaded:
+以下只有 RocksDB 我们才展示多线程的性能，因为其他的引擎实际上都是用锁把写入变成单线程的：
 
 .. figure:: files/single_vertex_write_qps.svg
    :alt: Single vertex write QPS
 
-   Single vertex write QPS
-
-RocksDB shines here as you can expect more than about 100K QPS for both
-setups. Using more than the number of performance cores on the Mac Mini
-decreases performance quite a bit, so avoid that if you can. But you
-can’t see the SQLite bars, can you? Let’s use logarithmic scale instead:
+RocksDB 这里的性能超群：Mac Mini 和服务器上都达到了每秒 10 万次以上。注意如果线程数量超过了性能核的数量，在 Mac Mini 上对性能会有不少的负面影响，所以尽量避免这种情况出现。另外，SQLite 的柱子根本看不见，是不是？我们用对数轴再来看看：
 
 .. figure:: files/single_vertex_write_qps_zoom.svg
    :alt: Single vertex write QPS zoom
 
-   Single vertex write QPS zoom
+RocksDB 每秒能处理 10 万次，结果 SQLite 在服务器上处理 100 次都困难？这整整慢了 1000 倍都不止！我们知道，SQLite 的写事务本来就慢得很，而由于我们测的就是单点写，这里每次操作都必须作为 SQLite 的写事务来执行，没有别的办法。所以我们只能建议如果你需要大量的并行写入，别用 SQLite。
 
-Whereas RocksDB easily manages more than 100K QPS, SQLite struggles to
-reach even 100 QPS on the server with the slow SSD. That is more than
-1000 times slower! It is so slow since each request translates into an
-SQLite write transaction, and SQLite writes transactions are known to be
-super expensive. These separate transactions are unavoidable here
-because that’s the rule for the game: lots of independent, potentially
-conflicting writes to the database. The moral of the story is to stay
-away from the SQLite backend if you expect lots of independent writes.
-
-Memory usage?
+内存峰值：
 
 .. figure:: files/single_vertex_write_mem.svg
    :alt: Single vertex write mem
 
-   Single vertex write mem
-
-Completely reasonable, I’d say. Even for large datasets, RocksDB keeps
-memory usage under 500MB.
-
-For writing to edges, we need to put the data into both the ``friends``
-relation and the reverse ``friends.rev`` relation:
+成绩不错。即使是对中型集进行写入，RocksDB 用的内存也不超过 500MB。
 
 单点改
 ~~~~~~~~~~~~
 
-This query updates a field for a given row:
+这里我们更改指定行中一列的值：
 
 ::
 
    ?[uid, cmpl_pct, age, gender] := uid = $id, *user{uid, age, gender}, cmpl_pct = $n
    :put user {uid => cmpl_pct, age, gender}
 
-The performance:
+性能如下：
 
 .. figure:: files/single_vertex_update_qps.svg
    :alt: Single vertex update QPS
 
-   Single vertex update QPS
-
-It is slower than point writes, but within a factor of two. You can
-still easily manage more than 50K QPS for RocksDB. Memory usage is
-almost the same as the point write case:
+改比写慢，但是慢不过一倍。用 RocksDB 引擎的话，每秒 5 万次仍然很轻松。内存峰值与写操作差不多：
 
 .. figure:: files/single_vertex_update_mem.svg
    :alt: Single vertex update mem
 
-   Single vertex update mem
-
 混合查询
 ~~~~~~~~~~~~~~
 
-Of course in realistic situations, you would expect read, write and
-update to occur concurrently. We won’t show the details here, but the
-conclusion is that in such cases, the RocksDB backend doesn’t care if
-the queries are reads, writes or updates, whereas any amount of writes
-kills SQLite. If you want the details, you can find them in the
-:download:`spreadsheet <files/cozo_perf.xlsx>`.
+当然，在实际应用中，读、写、改一般是同时来的。这里我们就不展示具体数据了，基本结论是 RocksDB 引擎对读写改的性能都差不多，不同配比对其影响不大，但写和改只要一多 SQLite 就跑不动了。详情看 :download:`文件 <files/cozo_perf.xlsx>` 。
 
-If SQLite performs so badly at writes, why include it at all? Well, its
-performance is still acceptable if you are using it to build a desktop
-or mobile application where writes are batched, and with the SQLite
-engine, the database does not use more than the absolute minimal amount
-of memory.
+你可能会疑惑：上面的测试基本上说明 SQLite 的写性能不好，那干嘛还要用它？原因是在移动端的应用场景下，这样的性能其实也能用，尤其是当批量而不是单点写入的时候。另外 SQLite 真的是一比特多余的内存都不用。
 
 分析型查询（OLAP）
 -------------------------
 
-Online analytical processing (OLAP) queries are queries which may touch
-lots of rows in the database, do complex processing on them, and may
-return a large number of rows. All graph queries should fall into this
-category.
+一般来说，分析型查询（OLAP）一次影响很多行数据，也可能会对这些数据进行复杂的计算，返回的行数也可能很多。所有的图查询都可以认为是分析型查询。
 
-For OLAP queries, we are more interested in latency: how long does a
-query take before it returns (on average)?
+对于分析型查询来说，最重要的指标是延迟，即查询提交后（平均）多久会返回结果。
 
-朋友的朋友
+层层都有朋友
 ~~~~~~~~~~~~~~~~~~
 
-The classical graph traversal query is the “friends of friends” query:
-finding out who the friends of friends of a particular person are. For
-such queries, the intermediate results and the return sets must be
-stored somewhere (usually in memory). For these queries, we will only
-show results for the “medium” dataset: 1.6 million vertices and 32
-million edges. The same query for the smaller datasets complete much
-faster: refer to the raw numbers if you are interested.
+最简单的图查询就是找出某个人所有朋友的朋友都有谁。在这个查询中，第一层朋友的结果必须缓存起来（一般是缓存在内存里）。以下查询我们只给出对于中数据集的结果（160 万个节点，3200 万条边）。如果对更小的数据集做测试，则延迟低得多。文件里有详情。
 
-We start by following the “friends” relation twice—a “2 hops” query:
+首先我们来看“二段跳”的结果：朋友的朋友
 
 ::
 
    ?[to] := *friends{fr: $id, to: a}, *friends{fr: a, to}
 
-On average, this will return hundreds of rows.
+平均下来，每个人有大概几百个这种二阶友。性能：
 
 .. figure:: files/friends_2.svg
    :alt: Friends 2 latency
 
-   Friends 2 latency
+RocksDB 性能一如既往地好。当硬盘足够快的时候，它甚至比纯内存存储还快。由于这是只读查询，所以 SQLite 性能也不错。多线程操作会提高延迟，但是不多。
 
-We see that the RocksDB backend performs very well, and if the storage
-is fast enough, it is even faster than the mem backend. The SQLite
-backend also performs quite well competitively. Having more threads
-harms latency, but not much.
+峰值内存： |Friends 2 mem|
 
-For memory usage: |Friends 2 mem|
+与前面一样，SQLite 一点儿内存都不多用，多线程的时候例外。RocksDB 用的内存也不多。
 
-As usual, the SQLite backend doesn’t use more than the absolute minimal
-amount of memory, unless you have many concurrent threads. The memory
-usage of the RocksDB backend is also pretty small.
-
-Let’s now go up one hop to find out friends’ friends’ friends:
+接下来看三阶友的查询：
 
 ::
 
@@ -464,32 +282,21 @@ Let’s now go up one hop to find out friends’ friends’ friends:
    l2[to] := l1[fr], *friends{fr, to}
    ?[to] := l2[fr], *friends{fr, to}
 
-The variance of the number of returned rows is now very high: on average
-thousands of rows will be returned, and if you start with some
-particular nodes, you get tens of thousands of rows. The latency is as
-follows:
+三阶友的数量的方差极大，平均下来每个人有几千个三阶友，但是某些人的三阶友达到了几万个或更多。延迟如下：
 
 .. figure:: files/friends_3.svg
    :alt: Friends 3 latency
 
-   Friends 3 latency
+各个不同设置之间的的性能比与二阶差不多，但是整体上延迟时二阶的 20 倍。这也是大约返回数量的比。
 
-The trend is similar to the 2 hops case, except that the latency is
-about twenty times as long, roughly proportional to the number of
-returned rows.
-
-For memory usage:
+内存峰值：
 
 .. figure:: files/friends_3_mem.svg
    :alt: Friends 3 mem
 
-   Friends 3 mem
+因为返回数据时，所有的数据都必须在内存中，所以在所有配置下内存使用都比之前多。但是即使在开了 24 线程的服务器上，所用内存也不到 1GB。
 
-Because the database must keep the *return set* in memory, in all cases
-the memory usage increases. But it still manages with under 1GB of
-memory, even with 24 concurrent threads running on the server.
-
-Now let’s go to the extreme, by considering the 4 hops query:
+下面我们看四阶友：
 
 ::
 
@@ -498,42 +305,26 @@ Now let’s go to the extreme, by considering the 4 hops query:
    l3[to] := l2[fr], *friends{fr, to}
    ?[to] := l3[fr], *friends{fr, to}
 
-The number of return rows now varies wildly: from tens of thousands of
-rows if you start with someone who is solitary, or more than half of the
-whole dataset (more than 600K rows) if you start with someone popular!
+返回行数的方差现在大得惊人：孤僻的人只有几千个四阶友，但社牛们的四阶友差不多是整体人群的一半多！
 
 .. figure:: files/friends_4.svg
    :alt: Friends 4 latency
 
-   Friends 4 latency
+对于社牛来说，几秒就能数出自己几十上百万个四阶友，不错了。
 
-I’d say that for return sets this big, the average latency of a few
-seconds (or even less than a second) is excellent.
-
-Peak memory usage just reflects the size of the returned sets:
+内存峰值直接与返回集合大小挂钩：
 
 .. figure:: files/friends_4_mem.svg
    :alt: Friends 4 mem
 
-   Friends 4 mem
-
-We won’t go beyond four hops but will note instead that if you go up to
-six hops, by the “six degrees of separation”, you will return the
-majority of nodes in almost all cases. Actually, in our experiments,
-this already happens with a high probability for five hops.
+再往上剩阶意义不大了，因为根据“六度空间”理论，到了六阶的时候基本上返回值永远是全集。实际上在五阶的时候返回全集的概率就不小了。
 
 聚合查询
 ~~~~~~~~~~~~
 
-Aggregations present a different challenge to the database: here the
-amount of data to keep in memory is not much (in the case of counting,
-just a single counter), but the database must scan every row of a
-relation to return the result. For these queries, we will again only
-show results for the “medium” dataset: 1.6 million rows for the relation
-in question.
+对于数据库来说，聚合查询与图查询不同，是另一种挑战：内存中需要保存的数据很少（如果是计数只需要保存一个值），但是必须扫描表中所有行才能得出结果。我们只给出对于中型集（160 万行）的结果。
 
-First, we will group users by their age and return the counts for each
-age group:
+首先，我们查询不同年龄都有多少人：
 
 ::
 
@@ -542,120 +333,83 @@ age group:
 .. figure:: files/aggr_grp.svg
    :alt: Aggregation group latency
 
-   Aggregation group latency
+这实际上测试的是单核 CPU 性能与数据读取性能。不论什么设置，1 秒内能扫一百多万的表。
 
-This tests the single-core CPU performance and disk read performance.
-Around 1 second (within a factor of two) to scan the whole table in all
-cases.
-
-The memory usage is minimal as the return set is small:
+由于内存中不需要存额外的数据，峰值内存很小：
 
 .. figure:: files/aggr_grp_mem.svg
    :alt: Aggregation group mem
 
-   Aggregation group mem
-
-Now let’s add a filter to the aggregation:
+接下来我们在上面查询中加入一个规律：
 
 ::
 
    ?[age, count(age)] := *user{age}, age ~ 0 >= 18
 
-This adds in a bit of processing time, but in terms of the order of
-magnitude the numbers are similar to before: |Aggregation filter
-latency|
+过滤需要花费一些计算时间，但和之前的性能是同一个数量级的： |Aggregation filter latency|
 
-The memory usage is almost identical:
+峰值内存和之前雷同：
 
 .. figure:: files/aggr_filter_mem.svg
    :alt: Aggregation filter mem
 
-   Aggregation filter mem
-
-The results are similar if we compute several aggregations in tandem:
+不论同时做多少个聚合操作，结果都差不多，比如：
 
 ::
 
    ?[min(uid), max(uid), mean(uid)] := *user{uid, age}
 
-The latency: |Aggregation stats latency|
+延迟： |Aggregation stats latency|
 
-and the memory usage: |Aggregation stats mem|
+峰值内存： |Aggregation stats mem|
 
 佩奇指数
 ~~~~~~~~
 
-Finally let’s see how one of our canned algorithms performs: the
-Pagerank algorithm with query
+最后让我们看看内置算法的性能：佩奇指数算法
 
 ::
 
    ?[] <~ PageRank(*friends[])
 
-This time we will show results for different dataset sizes. First for
-the tiny dataset (10K vertices, 122K edges):
+我们会展示不同大小数据集的结果。首先是微型集（1 万个顶点，12 多万条边）：
 
 .. figure:: files/pagerank_tiny.svg
    :alt: Pagerank tiny latency
 
-   Pagerank tiny latency
-
-Completes in the blink of an eye. Memory usage:
+一眨眼就算完了。峰值内存：
 
 .. figure:: files/pagerank_tiny_mem.svg
    :alt: Pagerank tiny mem
 
-   Pagerank tiny mem
-
-Not much, since the dataset is truly tiny.
-
-Now for the small dataset (100K vertices, 1.7M edges):
+用得很少。接下来是小型集（10 万个顶点，170 万条边）：
 
 .. figure:: files/pagerank_small.svg
    :alt: Pagerank small latency
 
-   Pagerank small latency
-
-About one second within a factor of two. Memory usage:
+一秒的上下一倍之内。峰值内存：
 
 .. figure:: files/pagerank_small_mem.svg
    :alt: Pagerank small mem
 
-   Pagerank small mem
+实际上所用内存基本就是把整个图使用特殊格式存在内存里占用的量（比存储格式用得少）。
 
-This is the amount of memory used to store the graph in the main memory,
-which is less than the size of the total graph on disk.
-
-Now for the full dataset (1.6M vertices, 32M edges):
+全数据集（160 多万个顶点，3200 多万条边）：
 
 .. figure:: files/pagerank_medium.svg
    :alt: Pagerank medium latency
 
-   Pagerank medium latency
-
-About half a minute across all setups. I’d argue that this is as fast as
-*any* implementation could go. (, currently, we did not implement the
-Pagerank algorithm ourselves: instead, we used the excellent
-implementation of this crate. In the future we will continue to improve
-canned algorithms according to the metrics that we collected from our
-internal tests.) Memory usage:
+不管什么设置，半分钟都跑完了。实际上世界上最快的佩奇指数实现大概也不会快太多。峰值内存：
 
 .. figure:: files/pagerank_medium_mem.svg
    :alt: Pagerank medium mem
 
-   Pagerank medium mem
-
-1GB memory for such a workload is more than reasonable.
+这个量级的图用了差不多 1GB 内存，比较合理。
 
 结论
 ----------
 
-We hope that you are convinced that Cozo is an extremely performant
-database that excels on minimal resources. As it can run (almost)
-everywhere, please try it for your use case, and send us feedback so
-that we can improve Cozo further! In a future blog, we will talk about
-some of the design decisions of Cozo, and the impact on performance and
-memory usage of these decisions.
+我们可以看出，Cozo 性能强劲，同时资源占用少。Cozo 又基本哪儿都能跑。所以你还有什么不用的理由呢？我们期待你使用后的反馈。
 
 .. |Friends 2 mem| image:: files/friends_2_mem.svg
 .. |Aggregation filter latency| image:: files/aggr_filter.svg
