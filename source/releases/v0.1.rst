@@ -1,82 +1,49 @@
 Cozo 的应用场景
 =========================
 
-As Cozo is a general-purpose database, 
-it can be used in situations where traditional databases such as PostgreSQL and SQLite are used. 
-However, Cozo is designed to overcome several shortcomings of traditional databases, 
-and hence fares especially well in specific situations:
+Cozo 是一个通用型的数据库，因此在一般 PostgreSQL 与 SQLite 的应用场景中都是可以使用的。不过，Cozo 的出现本来就是为了弥补传统数据库在一些特定场景下的短板，以下我们一一加以介绍。
 
-Interconnected relations
+互联关系
 ------------------------------
 
-You have a lot of interconnected relations and the usual queries need to relate many relations together. 
-In other words, you need to query a complex graph.
+第一个场景是你有一大堆表，而这些表里的数据内容是互相关联的。使用时，你需要将这些表中的内容作为一个复杂的网状结构来查询。
 
-An example is a system granting permissions to users for specific tasks. 
-In this case, users may have roles, belong to an organization hierarchy, 
-and tasks similarly have organizations and special provisions associated with them. 
-The granting process itself may also be a complicated rule encoded as data within the database.
+一个具体的例子是为用户在做不同操作时进行授权的系统。在此例中，需要考虑用户在组织结构中的职位所具有的权限、操作涉及的各个组织对于操作人员的具体要求，也需要考虑授权操作本身在不同组织中不同的规则。
 
-With a traditional database, the corresponding SQL tend to become an entangled web of nested queries, 
-with many tables joined together, and maybe even with some recursive CTE thrown in. 
-This is hard to maintain, and worse, 
-the performance is unpredictable since query optimizers in general fail when you have over twenty tables joined together.
+这种查询如果用传统的数据库来写，一般结果是一坨多层嵌套的表关连，并包含一大堆的公共表表达式（CTE）。这种查询不但难写、难读、出了问题难以找到根源，而且随着表的增多（尤其是 20 张表以上的时候），具体查询的执行由于查询计划优化器的存在反而变得不可控，常常由于糟糕的查询计划使查询超时。
 
-With Cozo, on the other hand, 
-Horn clauses make it easy to break the logic into smaller pieces and write clear, easily testable queries. 
-Furthermore, the deterministic evaluation order makes identifying and solving performance problems easier.
+在 Cozo 中，查询是以一个个 Horn 规则组成的，这些规则将复杂的查询拆解为易于理解的最小部分，再由其组合来得到最终结构。另外，Cozo 中所有查询执行计划都是确定性的，即完全可以根据查询文本本身知道查询的具体执行方案，这也使优化查询性能的工作变得简单得多。
 
-Just a graph
+纯粹的网络（图）
 ---------------
 
-Your data may be simple, even a single table, but it is inherently a graph.
+第二个场景是你的表很少，可能就一张，但这一张表实际上代表了一个网络结构（图）。
 
-We have seen an example in the Tutorial: the air route dataset, 
-where the key relation contains the routes connecting airports.
+在入门教程中我们接触的航线数据集就是这样的：航线表本身结构非常简单，仅仅包含起点和终点的机场代码以及航线距离。
 
-In traditional databases, when you are given a new relation, 
-you try to understand it by running aggregations on it to collect statistics: 
-what is the distribution of values, how are the columns correlated, etc.
+在传统的数据库中，当你拿到新的数据时，一般通过执行各种聚合计算来从统计上了解数据的内涵，比如各个值的分布，各个列的关联性，等等。
 
-In Cozo you can do the same exploratory analysis, 
-except now you also have graph algorithms that you can easily apply to understand things such as: 
-what is the most connected entity, how are the nodes connected, 
-and what are the communities structure within the nodes.
+在 Cozo 中做这些聚合计算当然没有问题，然而我们也看到了，如果表本身背后是网络结构，这些计算得到的结果并没有太大意义。更有意义的信息隐含与网络结构中，如哪些节点是高连通性的“超级节点”，连通方式本身所决定的网络中的隐形社区，等等。这些计算一般的数据库做起来非常吃力，而在 Cozo 中就是输入一个命令的事儿。
 
 
-Hidden structures
+隐藏的结构
 -------------------
 
-Your data contains hidden structures that only become apparent when you identify the scales of the relevant structures.
+第三个场景是你的数据中隐含着一些重要的结构，而这些结构只有在特定的尺度下才会展现出来。
 
-Examples are most real networks, such as social networks, which have a very rich hierarchy of structures.
-  
-In a traditional database, you are limited to doing nested aggregations and filtering, 
-i.e. a form of multifaceted data analysis. 
-For example, you can analyze by gender, geography, job or combinations of them. 
-For structures hidden in other ways, or if such categorizing tags are not already present in your data, 
-you are out of luck.
+具体的例子是基本所有的存在于真实世界的网络结构，如社交网络。社交网络隐含着非常丰富的多层组织关系，而企业与企业间的关系、社群与社群间的关系，甚至是国家与国家间的关系，只有在明确地提取了这些高层次的组织之后才能开始研究。
 
-With Cozo, you can now deal with emergent and fuzzy structures by using e.g. community detection algorithms, 
-and collapse the original graph into a coarse-grained graph consisting of super-nodes and super-edges. 
-The process can be iterated to gain insights into even higher-order emergent structures. 
-This is possible in a social network with only edges and no categorizing tags associated with nodes at all, 
-and the discovered structures almost always have meanings correlated to real-world events and organizations, 
-for example, forms of collusion and crime rings. Also, from a performance perspective, 
-coarse-graining is a required step in analyzing the so-called big data, 
-since many graph algorithms have high complexity and are only applicable to the coarse-grained small or medium networks.
+在传统的数据库中，对这类数据能做的也就是多层嵌套的聚合计算及其分析，而这些分析都需要原始数据中已经有一些明确的标签。例如如果社交数据中记录了每个人的性别与其籍贯，那就可以以这两个维度提取一些统计数字出来。然而大多数类似的标签在数据中是缺失的，且有些属性本身就是隐形的，不可能在原始数据中存在。
 
-Knowledge augmentation
+在 Cozo 中，图算法在此可以大放异彩。比如，社区发现的算法可以在没有任何标签的情况下单凭网络结构就将网络中的多层级结构提取出来，而这多层结构每一层之间都可以抽取为其所在尺度的超级网络，对这些超级网络进行建模和分析得到的不再是简单的统计数字，而是对整个网络中生态的全方位、立体的浓缩体现。通过这种分析，诸如隐藏的犯罪集团、间谍网络、企业间的合谋传统都无可藏匿。另外一个优势是，超级网络由于已经将单个个体合并为组织进行了抽象，所以网络大小比原始的网络小得多，而很多复杂的图算法只能在较小的网络上才能得到结果。
+
+知识图谱的叠加
 -------------------------
 
-You want to understand your live business data better by augmenting it into a knowledge graph.
+第四个场景是你的数据是实时更新的线上数据，而你想通过适当的知识图谱来更好地理解这些数据。
 
-For example, your sales database contains product, buyer, inventory, and invoice tables. 
-The augmentation is external data about the entities in your data in the form of taxonomies and ontologies in layers.
+具体的例子是一个含有产品、买家、库存、订单等表单的销售数据库，与此对应的知识图谱是诸如产品背后的原料、厂家、用户辨识等数据，以及关于各个用户所属社群的背景知识，如学生、上班族、主妇等对不同产品的需求、偏好等。这些知识图谱完全是独立于线上数据的，有些也是多年的科研分析得出来的泛用结论。
 
-This is inherently a graph-theoretic undertaking and traditional databases are not suitable. 
-Usually, a dedicated graph processing engine is used, separate from the main database.
+这种将知识图谱叠加在实时数据上的查询本质上是图查询，完全不适合在传统的数据库中进行操作。对此，一般的做法是将数据定时导入专用的图计算平台，只在平台上进行图分析。
 
-With Cozo, it is possible to keep your live data and knowledge graph analysis together,
-and importing new external data and doing analysis is just a few lines of code away. 
-This ease of use means that you will do the analysis much more often, with a perhaps much wider scope.
+对于 Cozo 来说，这种对于数据的割裂与人为造成的非实时性完全是可以避免的，同时导入、整理不同的知识图谱这件事情本身也是几行代码就能搞定的事情。由于简单，所以在 Cozo 中用户会更多地使用图分析以及指数图谱来熟悉这些数据，而由于熟悉，才能更好地内化数据背后的逻辑，在现实问题中做出更好的决策。

@@ -14,7 +14,7 @@ benchmarks to help the users answer the following questions:
 -  What is the performance I can expect from such a setup and is it
    enough for me?
 
-The setup
+准备工作
 ---------
 
 We will only be comparing Cozo to itself running on two different
@@ -112,10 +112,10 @@ You can download the complete result of the benchmarks as a spreadsheet
 :download:`here <files/cozo_perf.xlsx>`
 to do your own analysis.
 
-Loading data
+数据载入
 ------------
 
-Batch import
+批量载入
 ~~~~~~~~~~~~
 
 The first question we are interested in is how long it takes to load our
@@ -222,7 +222,7 @@ the memory usage of the mem backend before. If you are interested
 nonetheless, you can look at the raw data in the
 :download:`spreadsheet <files/cozo_perf.xlsx>`.
 
-Backup
+备份
 ~~~~~~
 
 In Cozo we can backup the database to an SQLite-based database. How fast
@@ -252,7 +252,7 @@ Memory usage:
 Not much surprise here. As we said before around 50MB is used by the
 benchmark infrastructure, so take that into account.
 
-Restoring from backup
+从备份恢复
 ~~~~~~~~~~~~~~~~~~~~~
 
 How fast is restoring from a backup?
@@ -276,14 +276,14 @@ Memory usage:
 
 No surprise.
 
-Transactional queries (OLTP)
+事务性查询（OLTP）
 ----------------------------
 
 Online Transaction Processing (OLTP) queries are simple reads or writes
 queries that are expected to finish quickly, and you are expected to
 deal with lots of them.
 
-Point read
+单点读
 ~~~~~~~~~~
 
 This is the simplest kind of query you can imagine: given an ID, it just
@@ -318,7 +318,7 @@ For memory usage:
 RocksDB only starts using memory with the medium dataset. In all other
 cases, memory usage is minimal.
 
-Point write
+单点写
 ~~~~~~~~~~~
 
 This is the simplest write query: it just creates a new vertex:
@@ -368,7 +368,7 @@ memory usage under 500MB.
 For writing to edges, we need to put the data into both the ``friends``
 relation and the reverse ``friends.rev`` relation:
 
-Point update
+单点改
 ~~~~~~~~~~~~
 
 This query updates a field for a given row:
@@ -394,7 +394,7 @@ almost the same as the point write case:
 
    Single vertex update mem
 
-Mixed queries?
+混合查询
 ~~~~~~~~~~~~~~
 
 Of course in realistic situations, you would expect read, write and
@@ -410,7 +410,7 @@ or mobile application where writes are batched, and with the SQLite
 engine, the database does not use more than the absolute minimal amount
 of memory.
 
-Analytical queries (OLAP)
+分析型查询（OLAP）
 -------------------------
 
 Online analytical processing (OLAP) queries are queries which may touch
@@ -421,7 +421,7 @@ category.
 For OLAP queries, we are more interested in latency: how long does a
 query take before it returns (on average)?
 
-Friends of friends
+朋友的朋友
 ~~~~~~~~~~~~~~~~~~
 
 The classical graph traversal query is the “friends of friends” query:
@@ -522,7 +522,7 @@ six hops, by the “six degrees of separation”, you will return the
 majority of nodes in almost all cases. Actually, in our experiments,
 this already happens with a high probability for five hops.
 
-Aggregations
+聚合查询
 ~~~~~~~~~~~~
 
 Aggregations present a different challenge to the database: here the
@@ -582,7 +582,7 @@ The latency: |Aggregation stats latency|
 
 and the memory usage: |Aggregation stats mem|
 
-Pagerank
+佩奇指数
 ~~~~~~~~
 
 Finally let’s see how one of our canned algorithms performs: the
@@ -647,7 +647,7 @@ internal tests.) Memory usage:
 
 1GB memory for such a workload is more than reasonable.
 
-Conclusion
+结论
 ----------
 
 We hope that you are convinced that Cozo is an extremely performant

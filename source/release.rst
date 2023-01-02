@@ -1,7 +1,7 @@
 一些笔记
 ==============
 
-Here are some miscellaneous notes about various aspects of CozoDB.
+以下是一些有关 Cozo 各个方面的笔记。
 
 .. toctree::
     :glob:
