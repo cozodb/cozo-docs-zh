@@ -35,6 +35,10 @@
 
     改变存储表的名称：由 ``<OLD_NAME>`` 改为 ``<NEW_NAME>`` 。可以同时改多个表的名称，也是用逗号隔开。
 
+.. function:: ::index ...
+
+    操作索引表，详见 :doc:`stored` 。
+
 .. function:: ::show_triggers <REL_NAME>
 
     列出存储表 ``<REL_NAME>`` 关联的触发器。
