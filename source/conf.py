@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-release = '0.4'
+release = '0.5'
 project = 'Cozo 数据库文档 ' + release
 author = '胡子扬'
 copyright = '2022, ' + author
