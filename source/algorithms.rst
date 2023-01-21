@@ -6,6 +6,8 @@
 
 只有在编译时启用了 ``graph-algo`` 选项时，以下叙述的算法规则才可用。目前除了浏览器 WASM 之外的所有预编译发布都启用了此选项。
 
+如果你使用的是 Rust、Python 或 NodeJS 的 Cozo 库，或 Cozo 的独立可执行文件，你可以自定义规定规则。具体方法请参考相应的文档。
+
 .. module:: Algo
     :noindex:
 
